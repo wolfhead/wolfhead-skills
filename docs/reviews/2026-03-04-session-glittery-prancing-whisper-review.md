@@ -12,12 +12,6 @@
 **Context**: Invoked at session start for greenfield project design — researching skill marketplace patterns for Claude Code and OpenClaw.
 **Used**: 1 time (re-invoked after auth error)
 
-**Findings**:
-- Session hit an OAuth token expiry on first attempt (401 error visible in conversation). User had to re-invoke the skill after running `/login`.
-- Second invocation proceeded correctly — created task list, dispatched research subagents, asked clarifying questions iteratively.
-- The brainstorming checklist was followed: explore context → research → ask questions → propose approaches → present design → write doc.
-- Two `AskUserQuestion` tool calls were rejected by the user (the 2 tool failures). This indicates the skill's question flow didn't match user expectations — possibly asking at wrong points or with wrong options.
-
 **Caller suggestions**:
 - The brainstorming skill was invoked with a large block of context in the args (URLs, instructions). Consider structuring the initial prompt more concisely — the skill already guides question-asking.
 
@@ -28,31 +22,11 @@
 **Verdict**: Partially effective — completed the job but required re-invocation and had 2 rejected interactions.
 
 ### superpowers:writing-plans
-**Context**: Invoked after brainstorming to create the implementation plan for the project.
-**Used**: 1 time
-
-**Findings**:
-- Plan was written and saved to `docs/plans/2026-03-04-wolfhead-skills-implementation.md`.
-- Execution proceeded smoothly with no failures.
-
-**Caller suggestions**: None — invoked correctly at the right time.
-
-**Skill suggestions**: None observed.
-
+**Context**: Invoked after brainstorming to create the implementation plan.
 **Verdict**: Effective.
 
 ### skill-creator
 **Context**: Invoked to create the `research-workflow` skill.
-**Used**: 1 time
-
-**Findings**:
-- Skill was created and committed to the project.
-- Followed the skill-creator process correctly.
-
-**Caller suggestions**: None.
-
-**Skill suggestions**: None observed.
-
 **Verdict**: Effective.
 
 ---
@@ -81,9 +55,6 @@
 **Missing skills**:
 - **Auth error recovery skill**: When OAuth tokens expire mid-session, there's no skill to help recover state. A skill that detects auth errors and preserves conversation state for re-invocation would prevent the wasted first turn.
 - **Research parallelization guidance**: Subagents consistently used sequential WebSearch/WebFetch. A skill or skill-level instruction pattern for "parallel web research" would improve efficiency across all research-based skills.
-
-**Missing agent specializations**:
-- None — the general-purpose subagents handled research tasks well. The Explore agent type would have been appropriate for the codebase research but wasn't needed since the project was greenfield.
 
 ---
 

@@ -116,14 +116,17 @@ Create `docs/reviews/` if it doesn't exist.
 **Context**: <what was happening when invoked>
 **Used**: <N> times
 
-**Findings**: <what happened, how skill was followed>
 **Caller suggestions**: <how invoker could use skill better — timing, args, context>
 **Skill suggestions**: <non-trivial improvements to the skill itself>
 **Verdict**: effective / partially effective / ineffective
 
+(Omit Caller suggestions or Skill suggestions if none. Omit entire skill block if verdict is "effective" with no suggestions.)
+
 ---
 
 ## 2. Usage Patterns
+
+(Include only subsections with findings. Omit empty subsections.)
 
 **Patterns**: <recurring behaviors across tools and agents>
 **Anti-patterns**: <doom loops, premature completion, over-spawning>
@@ -132,6 +135,8 @@ Create `docs/reviews/` if it doesn't exist.
 ---
 
 ## 3. Gap Analysis
+
+(Omit entire section if no gaps found. Omit individual subsections if empty.)
 
 **Missing skills**: <situations needing a skill that doesn't exist — concept + rationale>
 **Missing specializations**: <subagent types that would have helped>
