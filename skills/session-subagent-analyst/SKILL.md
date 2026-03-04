@@ -1,11 +1,11 @@
 ---
 name: session-subagent-analyst
-description: "Use when dispatched as a subagent to analyze a Claude Code session or subsession transcript for a performance review. Read the condensed JSON file at the path given in your prompt. Follow the checklist to produce a structured JSON report. Triggers: 'analyze subagent', 'analyze session transcript', 'session performance review subagent'."
+description: "Use when dispatched as a subagent to analyze a Claude Code session or subsession transcript for a performance review. Read the condensed JSON file at the path given in your prompt. Follow the checklist to produce a structured markdown report with LEARNINGS and ERRORS sections. Triggers: 'analyze subagent', 'analyze session transcript', 'session performance review subagent'."
 ---
 
 # Session Subagent Analyst
 
-Analyze one condensed session/subsession JSON file and produce a structured JSON report. Follow the checklist exactly.
+Analyze one condensed session/subsession JSON file and produce a structured markdown report with LEARNINGS and ERRORS sections. Follow the checklist exactly.
 
 ## Input
 
@@ -50,51 +50,74 @@ Check each item. Only report findings — skip items with nothing notable.
 
 ## Output Format
 
-Output ONLY this JSON (no other text):
+Output your findings as two markdown sections separated by `===ERRORS===`. If a section has no findings, output just the header line.
 
-```json
-{
-  "analysis_type": "main_session|subsession",
-  "file_analyzed": "<path to the file you read>",
-  "task_label": "<short human-readable label derived from the first human message, e.g. 'code review of extract_session.py' or 'research Claude session format'>",
-  "skill_suggestions": [
-    {
-      "skill_name": "<name>",
-      "caller_suggestion": "<how the caller could use it better, or null>",
-      "skill_suggestion": "<how the skill itself could improve, or null>"
-    }
-  ],
-  "anti_patterns": [
-    {
-      "pattern": "<short name>",
-      "description": "<what happened>",
-      "impact": "<time/tokens/failures cost>",
-      "context": "<the situation: what was the agent trying to do, what went wrong>"
-    }
-  ],
-  "user_preferences": [
-    {
-      "preference": "<detected pattern>",
-      "scope": "global|project",
-      "evidence": "<what you observed>",
-      "context": "<the situation: what was the task, what did the agent do, why did the user react>"
-    }
-  ],
-  "gaps": [
-    {
-      "description": "<situation where a skill or specialization was missing>",
-      "proposed_skill": "<suggested name and brief description>"
-    }
-  ]
-}
+```
+===META===
+analysis_type: main_session|subsession
+file_analyzed: <path to the file you read>
+task_label: <short human-readable label>
+
+===LEARNINGS===
+
+## [LRN-YYYYMMDD-XXX] <category>
+
+**Priority**: low | medium | high
+**Status**: pending
+**Area**: <area>
+
+### Summary
+<one-line finding>
+
+### Details
+<context from session>
+
+### Metadata
+- Category: best_practice | correction | knowledge_gap | insight
+- Evidence: <what you observed>
+- Context: <the situation>
+
+---
+
+(repeat for each learning)
+
+===ERRORS===
+
+## [ERR-YYYYMMDD-XXX] <description>
+
+**Priority**: low | medium | high
+**Status**: pending
+**Area**: <area>
+
+### Summary
+<what failed>
+
+### Error
+<actual error output if available>
+
+### Context
+<what was being attempted, what went wrong>
+
+### Metadata
+- Impact: <time/tokens/failures cost>
+
+---
+
+(repeat for each error)
 ```
 
+**Category mapping from checklist items:**
+- User corrections / preferences → LRN entries with category `best_practice`
+- Skill suggestions → LRN entries with category `insight`
+- Gaps → LRN entries with category `knowledge_gap`
+- Anti-patterns / tool failures / doom loops → ERR entries
+
 **Field rules:**
-- Omit keys with no findings entirely — do not include empty arrays
-- `skill_suggestions`: only include if there are actual non-trivial suggestions. "Skill worked fine" is not a suggestion.
-- `anti_patterns`: concrete patterns only. Always include `context` explaining the situation. "Agent used Read" is not an anti-pattern. "Agent read the same 500-line file 4 times in one turn" is.
-- `user_preferences`: report anything that signals a user preference. Always include `context` explaining the situation. See reporting criteria below.
-- `gaps`: only include if there was a clear situation where a skill would have helped and none exists.
+- If no learnings found, output `===LEARNINGS===` with nothing after it (before `===ERRORS===`). Same for errors.
+- LRN entries with category `insight`: only include if there are actual non-trivial suggestions. "Skill worked fine" is not a suggestion.
+- ERR entries: concrete patterns only. Always include `Context` explaining the situation. "Agent used Read" is not an anti-pattern. "Agent read the same 500-line file 4 times in one turn" is.
+- LRN entries with category `best_practice`: report anything that signals a user preference. Always include `Details` and `Metadata` explaining the situation. See reporting criteria below.
+- LRN entries with category `knowledge_gap`: only include if there was a clear situation where a skill or specialization would have helped and none exists.
 
 ## Reporting Criteria
 
@@ -121,48 +144,82 @@ Output ONLY this JSON (no other text):
 
 ### CORRECT — report like this:
 
-User preference with context:
-```json
-{
-  "preference": "Uses GitLab, not GitHub",
-  "scope": "project",
-  "evidence": "Agent ran `gh pr create`, user said 'this is GitLab'",
-  "context": "Agent assumed GitHub when creating a merge request. User corrected to use GitLab CLI instead."
-}
+User preference with context (LRN entry):
+```markdown
+## [LRN-20260304-001] best_practice
+
+**Priority**: medium
+**Status**: pending
+**Area**: config
+
+### Summary
+Project uses GitLab, not GitHub
+
+### Details
+Agent ran `gh pr create`, user corrected: "this is GitLab". Agent assumed GitHub when creating a merge request.
+
+### Metadata
+- Category: best_practice
+- Evidence: Agent ran `gh pr create`, user said 'this is GitLab'
+- Context: Agent assumed GitHub when creating a merge request. User corrected to use GitLab CLI instead.
+
+---
 ```
 
-Anti-pattern with context:
-```json
-{
-  "anti_patterns": [
-    {
-      "pattern": "Sed misuse on Dockerfile",
-      "description": "Used sed with pipe delimiters on a path containing /usr/lib/, causing 'bad flag in substitute command'",
-      "impact": "Tool error, had to rewrite entire file via cat >",
-      "context": "Editing a Dockerfile RUN command. Agent chose sed instead of Edit tool. Pipe delimiter conflicted with path slashes."
-    }
-  ]
-}
+Anti-pattern with context (ERR entry):
+```markdown
+## [ERR-20260304-001] Sed misuse on Dockerfile
+
+**Priority**: medium
+**Status**: pending
+**Area**: backend
+
+### Summary
+Used sed with pipe delimiters on a path containing /usr/lib/, causing 'bad flag in substitute command'
+
+### Error
+bad flag in substitute command
+
+### Context
+Editing a Dockerfile RUN command. Agent chose sed instead of Edit tool. Pipe delimiter conflicted with path slashes. Had to rewrite entire file via cat >.
+
+### Metadata
+- Impact: Tool error, had to rewrite entire file
+
+---
 ```
 
 ### INCORRECT — do NOT report like this:
 
 Missing context (rejected):
-```json
-{
-  "preference": "Prefers direct output over deep analysis",
-  "scope": "global",
-  "evidence": "User interrupted twice"
-}
+```markdown
+## [LRN-20260304-002] best_practice
+
+**Priority**: medium
+**Status**: pending
+**Area**: workflow
+
+### Summary
+Prefers direct output over deep analysis
+
+### Metadata
+- Category: best_practice
+- Evidence: User interrupted twice
 ```
-Why rejected: No context. What was the user's original question? Why did they interrupt? Without this, the main analyst cannot distinguish a situational correction from a durable preference.
+Why rejected: No context. What was the user's original question? Why did they interrupt? Without this, the main analyst cannot distinguish a situational correction from a durable preference. Missing Details section and Context in Metadata.
 
 Missing context on anti-pattern (rejected):
-```json
-{
-  "pattern": "Faketime rabbit hole",
-  "description": "Spent ~45min on approach that doesn't work",
-  "impact": "45 minutes wasted"
-}
+```markdown
+## [ERR-20260304-002] Faketime rabbit hole
+
+**Priority**: medium
+**Status**: pending
+**Area**: unknown
+
+### Summary
+Spent ~45min on approach that doesn't work
+
+### Metadata
+- Impact: 45 minutes wasted
 ```
-Why rejected: No context. What was the agent trying to do? Why didn't it work? What was the eventual solution?
+Why rejected: No context. What was the agent trying to do? Why didn't it work? What was the eventual solution? Missing Error and Context sections.
