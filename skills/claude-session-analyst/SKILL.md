@@ -21,7 +21,7 @@ Does NOT modify skill files — observe, analyze, and report only.
 Determine target sessions from user input. Use the bundled search script:
 
 ```bash
-python3 <skill-dir>/scripts/claude/search_sessions.py --project "$PWD" --latest 5 --min-turns 3
+python3 <skill-dir>/scripts/search_sessions.py --project "$PWD" --latest 5 --min-turns 3
 ```
 
 Where `<skill-dir>` is the directory containing this SKILL.md (resolve via the skill's installation path).
@@ -40,7 +40,7 @@ The script returns a JSON array of session objects with `path`, `session_id`, `m
 For each session path from step 1, extract condensed data:
 
 ```bash
-python3 <skill-dir>/scripts/claude/extract_session.py <session.jsonl> --output-dir /tmp/claude-session-analyst/<session-id>/
+python3 <skill-dir>/scripts/extract_session.py <session.jsonl> --output-dir /tmp/claude-session-analyst/<session-id>/
 ```
 
 This creates:
