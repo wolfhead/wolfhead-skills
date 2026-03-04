@@ -77,22 +77,24 @@ Dispatch all subagents in parallel. Collect all markdown reports.
 
 ### 4. Write Per-Session Output
 
-For each session analyzed, collect the subagent's output and write it to a per-session directory.
+For each session analyzed, collect **all** subagent output (from the main session analysis AND every subsession analysis) and write combined results to a single per-session directory keyed by the **main session ID**.
 
-**Output directory:** `~/.wolfhead_skills/claude-session-analyst/<session_id>/`
+**Output directory:** `~/.wolfhead_skills/claude-session-analyst/<main_session_id>/`
+
+Each session from step 1 produces one directory — all findings from `main.json` and every `subagents/*.json` are merged into that directory's files.
 
 Create the directory:
 ```bash
-mkdir -p ~/.wolfhead_skills/claude-session-analyst/<session_id>
+mkdir -p ~/.wolfhead_skills/claude-session-analyst/<main_session_id>
 ```
 
-**Determine project metadata** from the session's condensed JSON:
+**Determine project metadata** from the session's condensed JSON (`main.json` metadata):
 - `Project`: short project name (last component of the project path, e.g., `wolfhead_skills`)
 - `Project-Path`: absolute project path from the session metadata
 
 **Write `LEARNINGS.md`:**
 
-Take all LRN entries from the subagent output (main session + all subsessions). Prepend the file header:
+Combine all LRN entries from all subagent outputs (main session + all subsessions) into one file. Prepend the file header:
 
 ```markdown
 # Learnings
@@ -109,7 +111,7 @@ Take all LRN entries from the subagent output (main session + all subsessions). 
 
 **Write `ERRORS.md`:**
 
-Take all ERR entries from the subagent output. Prepend the file header:
+Combine all ERR entries from all subagent outputs (main session + all subsessions) into one file. Prepend the file header:
 
 ```markdown
 # Errors
