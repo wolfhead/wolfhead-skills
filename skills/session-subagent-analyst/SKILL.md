@@ -1,15 +1,22 @@
 ---
 name: session-subagent-analyst
-description: "Use when dispatched as a subagent to analyze a Claude Code session or subsession transcript for a performance review. Read the condensed JSON file at the path given in your prompt. Follow the checklist to produce a structured markdown report with LEARNINGS and ERRORS sections. Triggers: 'analyze subagent', 'analyze session transcript', 'session performance review subagent'."
+description: "Use when dispatched as a subagent to analyze a Claude Code session transcript for a performance review. Read the condensed JSON file at the path given in your prompt. Follow the checklist and write LEARNINGS.md and ERRORS.md files to the output directory specified in your prompt. Triggers: 'analyze subagent', 'analyze session transcript', 'session performance review subagent'."
 ---
 
 # Session Subagent Analyst
 
-Analyze one condensed session/subsession JSON file and produce a structured markdown report with LEARNINGS and ERRORS sections. Follow the checklist exactly.
+Analyze one condensed session JSON file and write LEARNINGS.md and ERRORS.md to the output directory given in your prompt. Follow the checklist exactly.
 
 ## Input
 
-Read the condensed JSON file path from your prompt. The file contains:
+Read the condensed JSON file path and output parameters from your prompt:
+- **File path**: path to the condensed JSON file
+- **Output directory**: where to write LEARNINGS.md and ERRORS.md
+- **Session ID**: for the file header
+- **Project name**: for the file header
+- **Project path**: for the file header
+
+The condensed JSON file contains:
 - `metadata` — session ID, slug, model, tokens, turn durations
 - `conversation` — human messages, assistant turns, tool results
 - `skills` — skill invocations with name, args, result
@@ -48,17 +55,25 @@ Check each item. Only report findings — skip items with nothing notable.
 - [ ] **Skill compliance**: If a skill was invoked, did the subagent follow its documented steps? "deviated" = skipped steps or ignored instructions.
 - [ ] **Token efficiency**: Compare output tokens to task complexity. Flag if output seems 5x+ more than the task warrants (e.g., simple lookup generating 10k tokens).
 
-## Output Format
+## Output — Write Files Directly
 
-Output your findings as two markdown sections separated by `===ERRORS===`. If a section has no findings, output just the header line.
+After analysis, create the output directory and write two files. Use the output directory, session ID, project name, and project path provided in your prompt.
 
+```bash
+mkdir -p <output-directory>
 ```
-===META===
-analysis_type: main_session|subsession
-file_analyzed: <path to the file you read>
-task_label: <short human-readable label>
 
-===LEARNINGS===
+**Write `LEARNINGS.md`:**
+
+```markdown
+# Learnings
+
+**Session**: <session_id>
+**Project**: <project-name>
+**Project-Path**: <project-path>
+**Analyzed**: <ISO-8601 timestamp>
+
+---
 
 ## [LRN-YYYYMMDD-XXX] <category>
 
@@ -80,8 +95,19 @@ task_label: <short human-readable label>
 ---
 
 (repeat for each learning)
+```
 
-===ERRORS===
+**Write `ERRORS.md`:**
+
+```markdown
+# Errors
+
+**Session**: <session_id>
+**Project**: <project-name>
+**Project-Path**: <project-path>
+**Analyzed**: <ISO-8601 timestamp>
+
+---
 
 ## [ERR-YYYYMMDD-XXX] <description>
 
@@ -106,6 +132,10 @@ task_label: <short human-readable label>
 (repeat for each error)
 ```
 
+**Empty results:** If no learnings found, write LEARNINGS.md with just the header (no entries). Same for errors.
+
+**Re-scan behavior:** If the files already exist, overwrite them.
+
 **Category mapping from checklist items:**
 - User corrections / preferences → LRN entries with category `best_practice`
 - Skill suggestions → LRN entries with category `insight`
@@ -113,7 +143,6 @@ task_label: <short human-readable label>
 - Anti-patterns / tool failures / doom loops → ERR entries
 
 **Field rules:**
-- If no learnings found, output `===LEARNINGS===` with nothing after it (before `===ERRORS===`). Same for errors.
 - LRN entries with category `insight`: only include if there are actual non-trivial suggestions. "Skill worked fine" is not a suggestion.
 - ERR entries: concrete patterns only. Always include `Context` explaining the situation. "Agent used Read" is not an anti-pattern. "Agent read the same 500-line file 4 times in one turn" is.
 - LRN entries with category `best_practice`: report anything that signals a user preference. Always include `Details` and `Metadata` explaining the situation. See reporting criteria below.

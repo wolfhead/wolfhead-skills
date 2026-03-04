@@ -5,7 +5,7 @@ description: "Use when the user wants to review past Claude Code sessions. Dispa
 
 # Claude Session Analyst
 
-Orchestrate session transcript analysis. Dispatch cheap/fast subagents to analyze each session, then write per-session LEARNINGS.md and ERRORS.md files with project metadata.
+Orchestrate session transcript analysis. Dispatch cheap/fast subagents to analyze each session. Subagents write per-session LEARNINGS.md and ERRORS.md files directly.
 
 Does NOT modify skill files — observe, analyze, and report only.
 
@@ -14,7 +14,7 @@ Does NOT modify skill files — observe, analyze, and report only.
 - [ ] 1. Search for sessions
 - [ ] 2. Preprocess each session
 - [ ] 3. Dispatch analysis subagents
-- [ ] 4. Write per-session output
+- [ ] 4. Verify output
 
 ### 1. Search for Sessions
 
@@ -61,16 +61,20 @@ Use the Agent tool with these parameters:
 - `subagent_type`: `"general-purpose"` (NOT `session-subagent-analyst` — that is a skill, not an agent type)
 - `model`: Pick a model that can follow a checklist, read JSON, and produce structured markdown output. Needs reliable instruction-following but not deep reasoning.
 - `description`: `"Analyze session <session-id>"`
-- `prompt`: Include the file path, context, and the full sub-skill instructions:
+- `prompt`: Include the file path, output parameters, and the full sub-skill instructions:
 
 ```
-Analyze the session transcript at: <path to condensed JSON file>
+Analyze the session transcript at: <path to main.json>
 
-Context: This is part of a multi-session performance review.
-Parent session slug: <slug from metadata>
+Output directory: ~/.wolfhead_skills/claude-session-analyst/<session_id>
+Session ID: <session_id>
+Project: <project-name (last component of project path)>
+Project-Path: <absolute project path from metadata>
 
 <paste full session-subagent-analyst SKILL.md body here>
 ```
+
+**Determine project metadata** from each session's condensed JSON (`main.json` metadata) before dispatching. Pass it in the prompt so the subagent can write the file headers.
 
 **Do NOT use `run_in_background: true`.** Dispatch subagents in foreground so their results are returned directly. Background agents auto-complete and get cleaned up — calling `TaskOutput` on an already-completed background agent returns "No task found", which cascades as "Sibling tool call errored" to all parallel siblings.
 
@@ -80,58 +84,15 @@ Dispatch all session analysis agents in one parallel foreground call (one agent 
 
 Collect all markdown reports.
 
-### 4. Write Per-Session Output
+### 4. Verify Output
 
-For each session analyzed, collect the analysis subagent's output and write it to a per-session directory.
+The subagents write LEARNINGS.md and ERRORS.md directly. After all subagents complete, verify the files were created:
 
-**Output directory:** `~/.wolfhead_skills/claude-session-analyst/<session_id>/`
-
-Create the directory:
 ```bash
-mkdir -p ~/.wolfhead_skills/claude-session-analyst/<session_id>
+ls ~/.wolfhead_skills/claude-session-analyst/<session_id>/LEARNINGS.md ~/.wolfhead_skills/claude-session-analyst/<session_id>/ERRORS.md
 ```
 
-**Determine project metadata** from the session's condensed JSON (`main.json` metadata):
-- `Project`: short project name (last component of the project path, e.g., `wolfhead_skills`)
-- `Project-Path`: absolute project path from the session metadata
-
-**Write `LEARNINGS.md`:**
-
-Take all LRN entries from the analysis subagent's output. Prepend the file header:
-
-```markdown
-# Learnings
-
-**Session**: <session_id>
-**Project**: <project-name>
-**Project-Path**: <absolute project path>
-**Analyzed**: <ISO-8601 timestamp>
-
----
-
-(LRN entries from subagent output here)
-```
-
-**Write `ERRORS.md`:**
-
-Take all ERR entries from the analysis subagent's output. Prepend the file header:
-
-```markdown
-# Errors
-
-**Session**: <session_id>
-**Project**: <project-name>
-**Project-Path**: <absolute project path>
-**Analyzed**: <ISO-8601 timestamp>
-
----
-
-(ERR entries from subagent output here)
-```
-
-**Re-scan behavior:** If the directory already exists (session was analyzed before), overwrite the files. Keep only the latest analysis.
-
-**Empty results:** If a session produced no learnings, write LEARNINGS.md with just the header. Same for errors.
+Report which sessions were analyzed successfully and which failed.
 
 ## Quality Standards
 
