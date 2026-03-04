@@ -346,7 +346,7 @@ class TestExtractMetadata(unittest.TestCase):
         self.assertEqual(meta["last_timestamp"], "2026-03-03T12:53:12.000Z")
         self.assertIn("claude-sonnet-4-5-20250929", meta["models_used"])
         self.assertIn("jiekou-sonnet", meta["providers_used"])
-        self.assertEqual(meta["turn_count"], 2)  # 2 assistant messages
+        self.assertEqual(meta["turn_count"], 1)  # 1 user message
 
     def test_total_cost(self):
         records = _make_session_records()

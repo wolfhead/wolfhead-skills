@@ -194,6 +194,10 @@ def extract_metadata(records):
                 meta["first_timestamp"] = ts
             meta["last_timestamp"] = ts
 
+        # Count user messages as turns (consistent with search_sessions.py)
+        if cat == "human_message":
+            meta["turn_count"] += 1
+
         # Assistant messages — model, provider, usage, cost
         if cat == "assistant":
             msg = rec.get("message", {})
@@ -213,8 +217,6 @@ def extract_metadata(records):
                 cost = usage.get("cost", {})
                 if isinstance(cost, dict):
                     meta["total_cost"] += cost.get("total", 0)
-
-            meta["turn_count"] += 1
 
     meta["models_used"] = sorted(models_seen)
     meta["providers_used"] = sorted(providers_seen)
