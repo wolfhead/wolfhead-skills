@@ -443,10 +443,12 @@ class TestExtractModelSwitches(unittest.TestCase):
     def test_single_switch(self):
         records = [
             _make_session_header(),
-            _make_model_change(model_id="claude-sonnet-4-5-20250929", provider="jiekou-sonnet",
-                               msg_id="aaa", timestamp="2026-03-03T12:00:00Z"),
-            _make_model_change(model_id="claude-opus-4-5-20251101", provider="jiekou-opus",
-                               msg_id="bbb", timestamp="2026-03-03T13:00:00Z"),
+            _make_assistant_message(text="first", model="claude-sonnet-4-5-20250929",
+                                    provider="jiekou-sonnet", msg_id="a1",
+                                    timestamp="2026-03-03T12:00:00Z"),
+            _make_assistant_message(text="second", model="claude-opus-4-5-20251101",
+                                    provider="jiekou-opus", msg_id="a2",
+                                    timestamp="2026-03-03T13:00:00Z"),
         ]
         switches = extract_model_switches(records)
         self.assertEqual(len(switches), 1)
@@ -456,15 +458,26 @@ class TestExtractModelSwitches(unittest.TestCase):
         self.assertEqual(switches[0]["to_provider"], "jiekou-opus")
         self.assertEqual(switches[0]["timestamp"], "2026-03-03T13:00:00Z")
 
+    def test_no_switch_same_model(self):
+        records = [
+            _make_session_header(),
+            _make_assistant_message(text="first", model="model-a", provider="prov-a",
+                                    msg_id="a1", timestamp="T1"),
+            _make_assistant_message(text="second", model="model-a", provider="prov-a",
+                                    msg_id="a2", timestamp="T2"),
+        ]
+        switches = extract_model_switches(records)
+        self.assertEqual(switches, [])
+
     def test_multiple_switches(self):
         records = [
             _make_session_header(),
-            _make_model_change(model_id="model-a", provider="prov-a", msg_id="a1",
-                               timestamp="2026-03-03T12:00:00Z"),
-            _make_model_change(model_id="model-b", provider="prov-b", msg_id="b1",
-                               timestamp="2026-03-03T13:00:00Z"),
-            _make_model_change(model_id="model-c", provider="prov-c", msg_id="c1",
-                               timestamp="2026-03-03T14:00:00Z"),
+            _make_assistant_message(text="a", model="model-a", provider="prov-a",
+                                    msg_id="a1", timestamp="2026-03-03T12:00:00Z"),
+            _make_assistant_message(text="b", model="model-b", provider="prov-b",
+                                    msg_id="a2", timestamp="2026-03-03T13:00:00Z"),
+            _make_assistant_message(text="c", model="model-c", provider="prov-c",
+                                    msg_id="a3", timestamp="2026-03-03T14:00:00Z"),
         ]
         switches = extract_model_switches(records)
         self.assertEqual(len(switches), 2)

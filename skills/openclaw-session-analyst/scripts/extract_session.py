@@ -266,31 +266,33 @@ def extract_cost_by_model(records):
 
 
 def extract_model_switches(records):
-    """Extract model switch events as transitions.
+    """Extract model switch events from assistant messages.
 
-    Returns list of: {timestamp, from_model, from_provider, to_model, to_provider}
-    Only emits a switch when the model/provider actually changes.
+    Detects when the model/provider changes between consecutive assistant
+    responses. Returns list of: {timestamp, from_model, from_provider,
+    to_model, to_provider}
     """
     switches = []
     prev_model = None
     prev_provider = None
 
     for rec in records:
-        if classify_entry(rec) != "model_change":
+        if classify_entry(rec) != "assistant":
             continue
-        model = rec.get("modelId")
-        provider = rec.get("provider")
+        msg = rec.get("message", {})
+        model = msg.get("model")
+        provider = msg.get("provider")
+        if not model:
+            continue
 
-        if prev_model is not None:
-            # Only record if something changed
-            if model != prev_model or provider != prev_provider:
-                switches.append({
-                    "timestamp": rec.get("timestamp"),
-                    "from_model": prev_model,
-                    "from_provider": prev_provider,
-                    "to_model": model,
-                    "to_provider": provider,
-                })
+        if prev_model is not None and model != prev_model:
+            switches.append({
+                "timestamp": rec.get("timestamp"),
+                "from_model": prev_model,
+                "from_provider": prev_provider,
+                "to_model": model,
+                "to_provider": provider,
+            })
 
         prev_model = model
         prev_provider = provider
