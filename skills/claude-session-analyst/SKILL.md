@@ -73,7 +73,11 @@ Parent session slug: <slug from metadata>
 <paste full session-subagent-analyst SKILL.md body here>
 ```
 
-Dispatch all subagents in parallel. Collect all markdown reports.
+Dispatch subagents in parallel, but **batch by session** — dispatch all subagents for one session (main + its subsessions) together, wait for results, then move to the next session. Do not dispatch subagents across multiple sessions simultaneously (hitting 10+ parallel agents causes "Sibling tool call errored" cascading failures).
+
+**Error handling:** If a subagent fails, retry it once individually (not in a batch). If it fails again, skip it and note in the output that the file was not analyzed.
+
+Collect all markdown reports.
 
 ### 4. Write Per-Session Output
 
