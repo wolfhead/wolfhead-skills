@@ -1,11 +1,11 @@
 ---
 name: claude-session-analyst
-description: "Use when the user wants to review past Claude Code sessions, analyze skill performance, identify missing skills, detect user preferences, or improve agent workflows. Triggers: 'review session', 'review sessions', 'analyze session', 'what went well', 'session review', 'how did that go', 'improve skills', 'session summary', 'what happened', 'retrospective', 'debrief'."
+description: "Use when the user wants to review past Claude Code sessions. Dispatches subagents to analyze each session, writes per-session LEARNINGS.md and ERRORS.md files. Triggers: 'review session', 'review sessions', 'analyze session', 'session review', 'retrospective', 'debrief'."
 ---
 
 # Claude Session Analyst
 
-Orchestrate session transcript analysis to produce a self-improvement report. Dispatch cheap/fast subagents for analysis work, then synthesize their findings into one unified report.
+Orchestrate session transcript analysis. Dispatch cheap/fast subagents to analyze each session, then write per-session LEARNINGS.md and ERRORS.md files with project metadata.
 
 Does NOT modify skill files — observe, analyze, and report only.
 
@@ -14,7 +14,7 @@ Does NOT modify skill files — observe, analyze, and report only.
 - [ ] 1. Search for sessions
 - [ ] 2. Preprocess each session
 - [ ] 3. Dispatch analysis subagents
-- [ ] 4. Synthesize report
+- [ ] 4. Write per-session output
 
 ### 1. Search for Sessions
 
@@ -60,7 +60,7 @@ For each condensed JSON file (both `main.json` and every `subagents/*.json`), di
 
 Use the Agent tool with these parameters:
 - `subagent_type`: `"general-purpose"` (NOT `session-subagent-analyst` — that is a skill, not an agent type)
-- `model`: Pick a model that can follow a checklist, read JSON, and produce structured JSON output. Needs reliable instruction-following but not deep reasoning.
+- `model`: Pick a model that can follow a checklist, read JSON, and produce structured markdown output. Needs reliable instruction-following but not deep reasoning.
 - `description`: `"Analyze <main|subagent> <session-id>"`
 - `prompt`: Include the file path, context, and the full sub-skill instructions:
 
@@ -73,74 +73,66 @@ Parent session slug: <slug from metadata>
 <paste full session-subagent-analyst SKILL.md body here>
 ```
 
-Dispatch all subagents in parallel. Collect all JSON reports.
+Dispatch all subagents in parallel. Collect all markdown reports.
 
-### 4. Synthesize Report
+### 4. Write Per-Session Output
 
-Read all subagent JSON reports. Merge findings across all sessions into one unified report. Write to `~/.wolfhead_skills/claude-session-analyst/YYYY-MM-DD-<slug>-review.md` (create directory if needed). Use the session slug from metadata for the filename.
+For each session analyzed, collect the subagent's output and write it to a per-session directory.
 
-**Merge rules:**
-- **Skill Suggestions**: Group by skill name. Deduplicate similar suggestions. Note frequency.
-- **Anti-patterns**: Group by pattern name. Count occurrences across sessions.
-- **User Preferences**: Include all preferences from subagent reports. Preserve the `context` field. Distinguish between situational corrections (user redirected agent on a specific task) and durable preferences (user stated a general rule or corrected the same type of behavior across different tasks). Label each as `Situational` or `Durable` in the Type column.
-- **Gaps**: Deduplicate. Note frequency.
-- **Attribution**: When referencing where a finding was observed, use the `task_label` from subagent reports (e.g., "code review of extract_session.py") — never raw session IDs or agent IDs.
+**Output directory:** `~/.wolfhead_skills/claude-session-analyst/<session_id>/`
 
-## Report Template
+Create the directory:
+```bash
+mkdir -p ~/.wolfhead_skills/claude-session-analyst/<session_id>
+```
+
+**Determine project metadata** from the session's condensed JSON:
+- `Project`: short project name (last component of the project path, e.g., `wolfhead_skills`)
+- `Project-Path`: absolute project path from the session metadata
+
+**Write `LEARNINGS.md`:**
+
+Take all LRN entries from the subagent output (main session + all subsessions). Prepend the file header:
 
 ```markdown
-# Session Analysis Report
-**Date**: YYYY-MM-DD | **Sessions analyzed**: N
-**Session list**: <slug-1>, <slug-2>, ...
+# Learnings
+
+**Session**: <session_id>
+**Project**: <project-name>
+**Project-Path**: <absolute project path>
+**Analyzed**: <ISO-8601 timestamp>
 
 ---
 
-## 1. Skill Suggestions
-
-### <skill-name>
-**Observed in**: <N> sessions
-**Caller suggestions**: <how invoker could use skill better>
-**Skill suggestions**: <non-trivial improvements to the skill itself>
-
-(Omit skill if no suggestions. Omit Caller/Skill suggestions subsection if empty.)
-
----
-
-## 2. Anti-patterns
-
-**<pattern-name>**: <description of recurring inefficiency>
-- Observed in: <N>/<total> sessions
-- Context: <the situation where this occurred>
-- Impact: <what it costs — time, tokens, failures>
-- Recommendation: <how to fix>
-
-(Omit entire section if none found.)
-
----
-
-## 3. User Preferences
-
-| Preference | Type | Scope | Frequency | Context | Suggested Entry |
-|-----------|------|-------|-----------|---------|----------------|
-| <pattern> | Situational/Durable | Global/Project | <N>/<total> sessions | <brief context> | <what to add to CLAUDE.md or memory> |
-
-(Omit entire section if none found.)
-
----
-
-## 4. Gaps
-
-**<gap-name>**: <situation where a skill or specialization was missing>
-- Observed in: <N>/<total> sessions
-- Proposed skill: <name and brief description>
-
-(Omit entire section if none found.)
+(LRN entries from subagent output here)
 ```
+
+**Write `ERRORS.md`:**
+
+Take all ERR entries from the subagent output. Prepend the file header:
+
+```markdown
+# Errors
+
+**Session**: <session_id>
+**Project**: <project-name>
+**Project-Path**: <absolute project path>
+**Analyzed**: <ISO-8601 timestamp>
+
+---
+
+(ERR entries from subagent output here)
+```
+
+**Re-scan behavior:** If the directory already exists (session was analyzed before), overwrite the files. Keep only the latest analysis.
+
+**Empty results:** If a session produced no learnings, write LEARNINGS.md with just the header. Same for errors.
 
 ## Quality Standards
 
 - **Non-trivial only.** Skip obvious observations like "agent used Read to read a file."
 - **Be specific.** "Brainstorming skill invoked after user had already decided" > "skill could improve."
 - **Caller matters.** Often the issue is invocation (timing, args) not the skill itself.
-- **Cross-session patterns matter most.** Single-session findings are less actionable than patterns appearing in 3+ sessions.
 - **Token awareness.** Flag subagents using 5x+ expected tokens for their task.
+- **Per-session only.** Do not merge findings across sessions. Each session gets its own directory.
+- **Project metadata required.** Every LEARNINGS.md and ERRORS.md must have Project and Project-Path in the header.
