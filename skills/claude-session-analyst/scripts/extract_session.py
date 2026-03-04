@@ -15,6 +15,7 @@ from pathlib import Path
 
 
 CONTENT_PREVIEW_MAX_CHARS = 500  # Enough context for analysis without bloating output
+TOOL_INPUT_MAX_CHARS = 200  # Tool call inputs: keep key params, drop file content
 
 # ---------------------------------------------------------------------------
 # Task 2 — Core parser
@@ -216,6 +217,67 @@ def _truncate(text, max_len=CONTENT_PREVIEW_MAX_CHARS):
     return text[:max_len] + "..."
 
 
+def _summarize_tool_input(name, inp):
+    """Summarize tool call input to key params only, dropping large content.
+
+    For Write/Edit: keep file_path, drop content/new_string/old_string.
+    For Read: keep file_path, offset, limit.
+    For Bash: keep command (truncated).
+    For Agent: keep description, subagent_type, model.
+    For others: truncate the whole input dict.
+    """
+    if not isinstance(inp, dict):
+        return inp
+
+    if name == "Write":
+        summary = {"file_path": inp.get("file_path", "")}
+        if "content" in inp:
+            summary["content"] = f"({len(inp['content'])} chars)"
+        return summary
+    elif name == "Edit":
+        summary = {"file_path": inp.get("file_path", "")}
+        if "old_string" in inp:
+            summary["old_string"] = _truncate(inp["old_string"], 100)
+        if "new_string" in inp:
+            summary["new_string"] = _truncate(inp["new_string"], 100)
+        return summary
+    elif name == "Read":
+        summary = {"file_path": inp.get("file_path", "")}
+        for k in ("offset", "limit", "pages"):
+            if k in inp:
+                summary[k] = inp[k]
+        return summary
+    elif name == "Bash":
+        summary = {}
+        if "command" in inp:
+            summary["command"] = _truncate(inp["command"], TOOL_INPUT_MAX_CHARS)
+        if "description" in inp:
+            summary["description"] = _truncate(inp["description"], TOOL_INPUT_MAX_CHARS)
+        return summary
+    elif name in ("Agent", "Task"):
+        summary = {}
+        for k in ("description", "subagent_type", "model", "run_in_background"):
+            if k in inp:
+                summary[k] = inp[k]
+        if "prompt" in inp:
+            summary["prompt"] = f"({len(inp['prompt'])} chars)"
+        return summary
+    elif name == "Grep":
+        summary = {}
+        for k in ("pattern", "path", "glob", "type", "output_mode"):
+            if k in inp:
+                summary[k] = inp[k]
+        return summary
+    elif name == "Glob":
+        return {k: inp[k] for k in ("pattern", "path") if k in inp}
+    else:
+        # Generic: truncate the JSON representation
+        raw = json.dumps(inp, ensure_ascii=False)
+        if len(raw) <= TOOL_INPUT_MAX_CHARS:
+            return inp
+        return {"_summary": _truncate(raw, TOOL_INPUT_MAX_CHARS)}
+
+
 def _extract_tool_result_content(content_value):
     """Extract string content from a tool_result content field.
 
@@ -244,6 +306,7 @@ def extract_conversation(records):
     """
     turns = []
     tool_name_map = _build_tool_name_map(records)
+    success_count = 0  # Count successful tool results (not stored individually)
 
     # Group assistant records by message.id
     # We process records in order and emit turns sequentially
@@ -277,10 +340,11 @@ def extract_conversation(records):
                     if t:
                         texts.append(t)
                 elif btype == "tool_use":
+                    tool_name = block.get("name", "")
                     tool_calls.append({
                         "tool_use_id": block.get("id", ""),
-                        "name": block.get("name", ""),
-                        "input": block.get("input", {}),
+                        "name": tool_name,
+                        "input": _summarize_tool_input(tool_name, block.get("input", {})),
                     })
                 # Skip thinking blocks
 
@@ -314,17 +378,29 @@ def extract_conversation(records):
                     continue
                 if item.get("type") != "tool_result":
                     continue
-                tool_use_id = item.get("tool_use_id", "")
                 is_error = item.get("is_error", False)
-                raw_content = _extract_tool_result_content(item.get("content", ""))
-                tool_name = tool_name_map.get(tool_use_id, "unknown")
-                turns.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_use_id,
-                    "tool_name": tool_name,
-                    "is_error": bool(is_error),
-                    "content_preview": _truncate(raw_content, 500),
-                })
+                if is_error:
+                    # Keep full detail for errors
+                    tool_use_id = item.get("tool_use_id", "")
+                    raw_content = _extract_tool_result_content(item.get("content", ""))
+                    tool_name = tool_name_map.get(tool_use_id, "unknown")
+                    turns.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "tool_name": tool_name,
+                        "is_error": True,
+                        "content_preview": _truncate(raw_content, 500),
+                    })
+                else:
+                    success_count += 1
+
+    # Prepend a summary of successful tool results
+    if success_count > 0:
+        turns.insert(0, {
+            "type": "tool_results_summary",
+            "successful_tool_results": success_count,
+            "note": "Only error tool results are shown individually below.",
+        })
 
     return turns
 
