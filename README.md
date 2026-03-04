@@ -31,7 +31,8 @@ Copy skill folders into `.claude/skills/` in your project or `~/.claude/skills/`
 | Skill | Description |
 |-------|-------------|
 | [research-workflow](skills/research-workflow/) | Search-first research with parallel subagent source gathering. Never guess from training data on verifiable questions. |
-| [session-analyst](skills/session-analyst/) | Orchestrates multi-session transcript analysis. Searches sessions, preprocesses with subsession extraction, dispatches cheap/fast subagents, and synthesizes a unified self-improvement report. |
+| [claude-session-analyst](skills/claude-session-analyst/) | Orchestrates multi-session Claude Code transcript analysis. Searches sessions, preprocesses with subsession extraction, dispatches cheap/fast subagents, and synthesizes a unified self-improvement report. |
+| [openclaw-session-analyst](skills/openclaw-session-analyst/) | Orchestrates OpenClaw session transcript analysis with cost tracking, model switching detection, and multi-provider support. |
 | [session-subagent-analyst](skills/session-subagent-analyst/) | Checklist-driven sub-skill for dispatched analysis subagents. Produces structured JSON reports from condensed session/subsession data. |
 
 ## Adding Skills

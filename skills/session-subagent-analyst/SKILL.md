@@ -102,7 +102,7 @@ Output:
 ```json
 {
   "analysis_type": "subsession",
-  "file_analyzed": "/tmp/session-analyst/sess-001/subagents/agent-abc123.json",
+  "file_analyzed": "/tmp/claude-session-analyst/sess-001/subagents/agent-abc123.json",
   "anti_patterns": [
     {
       "pattern": "Sequential web research",

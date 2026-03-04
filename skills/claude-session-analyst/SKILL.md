@@ -1,9 +1,9 @@
 ---
-name: session-analyst
-description: "Use when the user wants to review past sessions, analyze skill performance, identify missing skills, detect user preferences, or improve agent workflows. Triggers: 'review session', 'review sessions', 'analyze session', 'what went well', 'session review', 'how did that go', 'improve skills', 'session summary', 'what happened', 'retrospective', 'debrief'."
+name: claude-session-analyst
+description: "Use when the user wants to review past Claude Code sessions, analyze skill performance, identify missing skills, detect user preferences, or improve agent workflows. Triggers: 'review session', 'review sessions', 'analyze session', 'what went well', 'session review', 'how did that go', 'improve skills', 'session summary', 'what happened', 'retrospective', 'debrief'."
 ---
 
-# Session Analyst
+# Claude Session Analyst
 
 Orchestrate session transcript analysis to produce a self-improvement report. Dispatch cheap/fast subagents for analysis work, then synthesize their findings into one unified report.
 
@@ -40,12 +40,12 @@ The script returns a JSON array of session objects with `path`, `session_id`, `m
 For each session path from step 1, extract condensed data:
 
 ```bash
-python3 <skill-dir>/scripts/claude/extract_session.py <session.jsonl> --output-dir /tmp/session-analyst/<session-id>/
+python3 <skill-dir>/scripts/claude/extract_session.py <session.jsonl> --output-dir /tmp/claude-session-analyst/<session-id>/
 ```
 
 This creates:
 ```
-/tmp/session-analyst/<session-id>/
+/tmp/claude-session-analyst/<session-id>/
 ├── main.json              # Main session condensed data
 ├── subagents/
 │   ├── agent-xxx.json     # Condensed subsession data
