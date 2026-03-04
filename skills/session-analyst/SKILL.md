@@ -54,20 +54,23 @@ This creates:
 
 ### 3. Dispatch Analysis Subagents
 
-For each condensed JSON file (both `main.json` and every `subagents/*.json`), dispatch one subagent using a cheap, fast model with average reasoning ability.
+For each condensed JSON file (both `main.json` and every `subagents/*.json`), dispatch one analysis subagent.
 
-**Before dispatching**, read `<skill-dir>/../session-subagent-analyst/SKILL.md` once and include its full body (after frontmatter) in every subagent prompt. Subagents cannot load skills on their own — the orchestrator must provide the instructions inline.
+**Before dispatching**, read `<skill-dir>/../session-subagent-analyst/SKILL.md` once and store its full body (everything after the YAML frontmatter). Include this content in every subagent prompt. Subagents cannot load skills on their own — the orchestrator must provide the instructions inline.
+
+Use the Agent tool with these exact parameters:
+- `subagent_type`: `"general-purpose"` (NOT `session-subagent-analyst` — that is a skill, not an agent type)
+- `model`: `"haiku"` (cheap/fast model for analysis work)
+- `description`: `"Analyze <main|subagent> <session-id>"`
+- `prompt`: Include the file path, context, and the full sub-skill instructions:
 
 ```
-Agent tool (model: cheap/fast):
-  description: "Analyze <main|subagent> <session-id>"
-  prompt: |
-    Analyze the session transcript at: <path to condensed JSON file>
+Analyze the session transcript at: <path to condensed JSON file>
 
-    Context: This is part of a multi-session performance review.
-    Parent session slug: <slug from metadata>
+Context: This is part of a multi-session performance review.
+Parent session slug: <slug from metadata>
 
-    <paste full session-subagent-analyst SKILL.md body here>
+<paste full session-subagent-analyst SKILL.md body here>
 ```
 
 Dispatch all subagents in parallel. Collect all JSON reports.
