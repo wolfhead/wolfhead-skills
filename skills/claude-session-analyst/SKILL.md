@@ -61,20 +61,17 @@ Use the Agent tool with these parameters:
 - `subagent_type`: `"general-purpose"` (NOT `session-subagent-analyst` — that is a skill, not an agent type)
 - `model`: Pick a model that can follow a checklist, read JSON, and produce structured markdown output. Needs reliable instruction-following but not deep reasoning.
 - `description`: `"Analyze session <session-id>"`
-- `prompt`: Include the file path, output parameters, and the full sub-skill instructions:
+- `prompt`: Include the file path, output directory, and the full sub-skill instructions:
 
 ```
 Analyze the session transcript at: <path to main.json>
 
 Output directory: ~/.wolfhead_skills/claude-session-analyst/<session_id>
-Session ID: <session_id>
-Project: <project-name (last component of project path)>
-Project-Path: <absolute project path from metadata>
 
 <paste full session-subagent-analyst SKILL.md body here>
 ```
 
-**Determine project metadata** from each session's condensed JSON (`main.json` metadata) before dispatching. Pass it in the prompt so the subagent can write the file headers.
+The subagent extracts session ID, project name, and project path from the condensed JSON metadata itself — no need to pre-read metadata.
 
 **Do NOT use `run_in_background: true`.** Dispatch subagents in foreground so their results are returned directly. Background agents auto-complete and get cleaned up — calling `TaskOutput` on an already-completed background agent returns "No task found", which cascades as "Sibling tool call errored" to all parallel siblings.
 

@@ -9,12 +9,14 @@ Analyze one condensed session JSON file and write LEARNINGS.md and ERRORS.md to 
 
 ## Input
 
-Read the condensed JSON file path and output parameters from your prompt:
+Read from your prompt:
 - **File path**: path to the condensed JSON file
 - **Output directory**: where to write LEARNINGS.md and ERRORS.md
-- **Session ID**: for the file header
-- **Project name**: for the file header
-- **Project path**: for the file header
+
+Extract from the condensed JSON `metadata` field:
+- **Session ID**: `metadata.session_id`
+- **Project name**: last component of `metadata.project_path` (e.g., `wolfhead_skills`)
+- **Project path**: `metadata.project_path` (absolute path)
 
 The condensed JSON file contains:
 - `metadata` — session ID, slug, model, tokens, turn durations
