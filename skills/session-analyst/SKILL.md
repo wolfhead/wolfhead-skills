@@ -1,156 +1,134 @@
 ---
 name: session-analyst
-description: "Analyze Claude Code session transcripts to review skill, agent, and user performance. Produces a structured report with per-skill findings, usage pattern analysis, gap identification, and user interaction insights. Use when the user wants to review a past session, improve skills based on real execution data, identify missing skills, or detect user preferences. Triggers: 'review session', 'analyze session', 'what went well', 'session review', 'how did that go', 'improve skills'."
+description: "Use when the user wants to review past sessions, analyze skill performance, identify missing skills, detect user preferences, or improve agent workflows. Triggers: 'review session', 'review sessions', 'analyze session', 'what went well', 'session review', 'how did that go', 'improve skills', 'session summary', 'what happened', 'retrospective', 'debrief'."
 ---
 
 # Session Analyst
 
-Performance analyst that reviews how skills, agents, and users performed in a session. Reads transcripts, identifies issues, and produces a structured report. Does NOT modify files — observe and report only.
+Orchestrate session transcript analysis to produce a self-improvement report. Dispatch cheap/fast subagents for analysis work, then synthesize their findings into one unified report.
+
+Does NOT modify skill files — observe, analyze, and report only.
 
 ## Process
 
-### 1. Resolve Session
+- [ ] 1. Search for sessions
+- [ ] 2. Preprocess each session
+- [ ] 3. Dispatch analysis subagents
+- [ ] 4. Synthesize report
 
-Determine which session(s) to analyze from user input:
+### 1. Search for Sessions
 
-```bash
-# Find session directory for current project
-PROJECT_KEY=$(echo "$PWD" | sed 's|/|-|g')
-SESSION_DIR="$HOME/.claude/projects/$PROJECT_KEY"
-
-# List sessions by modification time (most recent first)
-ls -lt "$SESSION_DIR"/*.jsonl 2>/dev/null | head -10
-```
-
-- No argument → most recent `.jsonl` file
-- Partial UUID → match against filenames
-- `latest N` → N most recent files, analyze each separately
-
-### 2. Run Preprocessor
-
-Extract signals from the raw JSONL using the bundled Python script:
+Determine target sessions from user input. Use the bundled search script:
 
 ```bash
-python3 <skill-dir>/extract_session.py <session.jsonl> --output /tmp/session-analyst-output.json
+python3 <skill-dir>/scripts/search_sessions.py --project "$PWD" --latest 5 --min-turns 3
 ```
 
-If the script exits with error code 1, the file is a subagent session — ask the user for a main session file instead.
+Where `<skill-dir>` is the directory containing this SKILL.md (resolve via the skill's installation path).
 
-Read the output JSON. It contains:
-- `metadata` — session ID, slug, model, tokens, turn durations
-- `conversation` — sequence of human messages, assistant turns, tool results
-- `skills` — Skill tool invocations with name, args, result
-- `subagents` — Task tool invocations with agent_id, type, status, duration, tokens
-- `tool_failures` — tool results with `is_error: true`
-- `api_errors` — API errors with retry info
-- `compactions` — context compaction events
-- `subagent_files` — paths to subagent JSONL files
+**Argument mapping:**
+- "review this session" / "last session" → `--latest 1`
+- "review last N sessions" → `--latest N`
+- "review today's sessions" → `--date YYYY-MM-DD`
+- "review sessions since Monday" → `--since YYYY-MM-DD`
+- No argument → `--latest 5` (default)
 
-### 3. Extract Subagent Transcripts
+The script returns a JSON array of session objects with `path`, `session_id`, `modified`, `size_bytes`, and `turn_count`.
 
-For each path in `subagent_files`, read the subagent JSONL directly with the Read tool (they're typically smaller than parent sessions). Alternatively, run the preprocessor in a mode that skips the main-session check — parse the raw JSONL for tool calls, results, and conversation flow.
+### 2. Preprocess Each Session
 
-### 4. Fan-Out Analysis
+For each session path from step 1, extract condensed data:
 
-Dispatch one analysis subagent (haiku model) per subagent transcript, in parallel:
+```bash
+python3 <skill-dir>/scripts/extract_session.py <session.jsonl> --output-dir /tmp/session-analyst/<session-id>/
+```
+
+This creates:
+```
+/tmp/session-analyst/<session-id>/
+├── main.json              # Main session condensed data
+├── subagents/
+│   ├── agent-xxx.json     # Condensed subsession data
+│   └── ...
+```
+
+### 3. Dispatch Analysis Subagents
+
+For each condensed JSON file (both `main.json` and every `subagents/*.json`), dispatch one subagent using a cheap, fast model with average reasoning ability:
 
 ```
-Agent tool (model: haiku):
-  description: "Analyze subagent <agent-id>"
+Agent tool (model: cheap/fast):
+  description: "Analyze <main|subagent> <session-id>"
   prompt: |
-    Analyze this subagent execution transcript for a session performance review.
+    Analyze the session transcript at: <path to condensed JSON file>
 
-    Parent session: <slug>
-    Task given: "<description from subagents list>"
-    Subagent type: <subagent_type>
+    Context: This is part of a multi-session performance review.
+    Parent session slug: <slug from metadata>
 
-    Transcript data:
-    <paste condensed data>
-
-    Report as JSON:
-    {
-      "agent_id": "<id>",
-      "task": "<what it was asked to do>",
-      "outcome": "success|partial|failure",
-      "findings": ["<finding>"],
-      "inefficiencies": ["<issue>"],
-      "skill_compliance": "compliant|deviated|no-skill",
-      "tool_failure_count": N,
-      "doom_loop_detected": false,
-      "suggestions": ["<suggestion>"]
-    }
+    Use the session-subagent-analyst skill to guide your analysis.
+    Output only the JSON report.
 ```
 
-### 5. Analyze Parent Session
+Dispatch all subagents in parallel. Collect all JSON reports.
 
-While subagents run, analyze the parent session condensed JSON for:
-- **Skill usage**: Were skills invoked at the right time? With good arguments? Any missed invocations?
-- **User patterns**: Instruction clarity, corrections, repeated preferences
-- **Flow efficiency**: Turn count, token usage, unnecessary subagent spawning
-- **Gaps**: Situations where a skill or agent specialization was missing
+### 4. Synthesize Report
 
-### 6. Synthesize Report
+Read all subagent JSON reports. Merge findings across all sessions into one unified report. Write to `docs/reviews/YYYY-MM-DD-sessions-review.md` (create directory if needed).
 
-Combine parent analysis + all subagent reports. Write to:
-
-```
-docs/reviews/YYYY-MM-DD-session-<slug>-review.md
-```
-
-Create `docs/reviews/` if it doesn't exist.
+**Merge rules:**
+- **Skill Suggestions**: Group by skill name. Deduplicate similar suggestions. Note frequency.
+- **Anti-patterns**: Group by pattern name. Count occurrences across sessions.
+- **User Preferences**: Only promote to the report if observed in 2+ sessions (single-session observations are noise).
+- **Gaps**: Deduplicate. Note frequency.
 
 ## Report Template
 
 ```markdown
-# Session Review: <slug>
-**Date**: YYYY-MM-DD | **Session**: <uuid> | **Model**: <model>
-**Duration**: <sum of turn_durations> | **Turns**: <N> | **Subagents**: <N>
-**Tokens**: <total> (in: <N>, out: <N>, cached: <N>)
-**Tool Failures**: <N> | **API Errors**: <N> | **Compactions**: <N>
+# Session Analysis Report
+**Date**: YYYY-MM-DD | **Sessions analyzed**: N
+**Session list**: <slug-1>, <slug-2>, ...
 
 ---
 
-## 1. Per-Skill Performance
+## 1. Skill Suggestions
 
 ### <skill-name>
-**Context**: <what was happening when invoked>
-**Used**: <N> times
-
-**Caller suggestions**: <how invoker could use skill better — timing, args, context>
+**Observed in**: <N> sessions
+**Caller suggestions**: <how invoker could use skill better>
 **Skill suggestions**: <non-trivial improvements to the skill itself>
-**Verdict**: effective / partially effective / ineffective
 
-(Omit Caller suggestions or Skill suggestions if none. Omit entire skill block if verdict is "effective" with no suggestions.)
-
----
-
-## 2. Usage Patterns
-
-(Include only subsections with findings. Omit empty subsections.)
-
-**Patterns**: <recurring behaviors across tools and agents>
-**Anti-patterns**: <doom loops, premature completion, over-spawning>
-**Efficiency**: <token waste, redundant calls, subagents vs direct tools>
+(Omit skill if no suggestions. Omit Caller/Skill suggestions subsection if empty.)
 
 ---
 
-## 3. Gap Analysis
+## 2. Anti-patterns
 
-(Omit entire section if no gaps found. Omit individual subsections if empty.)
+**<pattern-name>**: <description of recurring inefficiency>
+- Observed in: <N>/<total> sessions
+- Impact: <what it costs — time, tokens, failures>
+- Recommendation: <how to fix>
 
-**Missing skills**: <situations needing a skill that doesn't exist — concept + rationale>
-**Missing specializations**: <subagent types that would have helped>
+(Omit entire section if none found.)
 
 ---
 
-## 4. User Interaction Analysis
+## 3. User Preferences
 
-**Communication**: <instruction clarity, context quality, feedback style>
-**Preferences**: <recurring choices suggesting persistent preferences>
+| Preference | Scope | Frequency | Suggested Entry |
+|-----------|-------|-----------|----------------|
+| <pattern> | Global/Project | <N>/<total> sessions | <what to add to CLAUDE.md or memory> |
 
-| Preference | Scope | Suggested Entry |
-|-----------|-------|----------------|
-| <pattern> | Global/Project | <what to add> |
+(Omit entire section if none found.)
+
+---
+
+## 4. Gaps
+
+**<gap-name>**: <situation where a skill or specialization was missing>
+- Observed in: <N>/<total> sessions
+- Proposed skill: <name and brief description>
+
+(Omit entire section if none found.)
 ```
 
 ## Quality Standards
@@ -158,5 +136,5 @@ Create `docs/reviews/` if it doesn't exist.
 - **Non-trivial only.** Skip obvious observations like "agent used Read to read a file."
 - **Be specific.** "Brainstorming skill invoked after user had already decided" > "skill could improve."
 - **Caller matters.** Often the issue is invocation (timing, args) not the skill itself.
-- **Preference threshold.** One correction = observation. Three similar corrections = preference.
+- **Cross-session patterns matter most.** Single-session findings are less actionable than patterns appearing in 3+ sessions.
 - **Token awareness.** Flag subagents using 5x+ expected tokens for their task.
