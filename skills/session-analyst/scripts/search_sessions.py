@@ -9,7 +9,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 MAX_SESSIONS = 20  # Hard cap to prevent runaway analysis
@@ -96,20 +96,23 @@ def search_sessions(project_path=None, since=None, date=None, latest=DEFAULT_LAT
                 continue
             candidates.append(f)
 
+    # Cache stat results to avoid repeated syscalls
+    stat_cache = {f: f.stat() for f in candidates}
+
     # Filter by date
     if since:
         since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         candidates = [f for f in candidates if datetime.fromtimestamp(
-            f.stat().st_mtime, tz=timezone.utc) >= since_dt]
+            stat_cache[f].st_mtime, tz=timezone.utc) >= since_dt]
 
     if date:
         date_dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        date_end = date_dt.replace(hour=23, minute=59, second=59)
+        date_end = date_dt + timedelta(days=1)  # Exclusive upper bound
         candidates = [f for f in candidates if date_dt <= datetime.fromtimestamp(
-            f.stat().st_mtime, tz=timezone.utc) <= date_end]
+            stat_cache[f].st_mtime, tz=timezone.utc) < date_end]
 
     # Sort by modification time (most recent first)
-    candidates.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+    candidates.sort(key=lambda f: stat_cache[f].st_mtime, reverse=True)
 
     # Build results with turn count filter
     results = []
@@ -121,20 +124,20 @@ def search_sessions(project_path=None, since=None, date=None, latest=DEFAULT_LAT
         if turns < min_turns:
             continue
 
-        stat = f.stat()
+        st = stat_cache[f]
         session_id = f.stem  # UUID without .jsonl
 
         results.append({
             "path": str(f),
             "session_id": session_id,
-            "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).strftime(
+            "modified": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S"),
-            "size_bytes": stat.st_size,
+            "size_bytes": st.st_size,
             "turn_count": turns,
         })
 
     if len(candidates) > MAX_SESSIONS:
-        print(f"Warning: {len(candidates)} sessions found, returning {MAX_SESSIONS} most recent",
+        print(f"Warning: {len(candidates)} sessions matched, returning {len(results)} most recent",
               file=sys.stderr)
 
     return results
