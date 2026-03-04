@@ -73,7 +73,9 @@ Parent session slug: <slug from metadata>
 <paste full session-subagent-analyst SKILL.md body here>
 ```
 
-Dispatch subagents in parallel, but **batch by session** — dispatch all subagents for one session (main + its subsessions) together, wait for results, then move to the next session. Do not dispatch subagents across multiple sessions simultaneously (hitting 10+ parallel agents causes "Sibling tool call errored" cascading failures).
+**Do NOT use `run_in_background: true`.** Dispatch subagents in foreground so their results are returned directly. Background agents auto-complete and get cleaned up — calling `TaskOutput` on an already-completed background agent returns "No task found", which cascades as "Sibling tool call errored" to all parallel siblings.
+
+**Batch by session** — dispatch all subagents for one session (main + its subsessions) together in one parallel foreground call, collect results, then move to the next session. This keeps each batch small (typically 1-5 agents) and avoids the cascading failure from large batches.
 
 **Error handling:** If a subagent fails, retry it once individually (not in a batch). If it fails again, skip it and note in the output that the file was not analyzed.
 
