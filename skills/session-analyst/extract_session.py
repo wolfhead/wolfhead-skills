@@ -376,7 +376,10 @@ def extract_skills(records):
 
 
 def extract_subagents(records):
-    """Extract Task (subagent) tool invocations.
+    """Extract Agent/Task (subagent) tool invocations.
+
+    The tool is named "Agent" in Claude Code JSONL files (may also appear as
+    "Task" in some versions). Both names are matched.
 
     Returns list of dicts with: description, prompt, subagent_type,
     tool_use_id, agent_id, status, duration, tokens.
@@ -391,7 +394,7 @@ def extract_subagents(records):
         if not isinstance(content, list):
             continue
         for block in content:
-            if block.get("type") == "tool_use" and block.get("name") == "Task":
+            if block.get("type") == "tool_use" and block.get("name") in ("Task", "Agent"):
                 inp = block.get("input", {})
                 tool_use_id = block.get("id", "")
                 task_calls[tool_use_id] = {

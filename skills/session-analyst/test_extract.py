@@ -631,6 +631,46 @@ class TestExtractSubagents(unittest.TestCase):
         self.assertEqual(sa["duration"], 155647)
         self.assertEqual(sa["tokens"], 37577)
 
+    def test_agent_tool_name(self):
+        """The tool may be named 'Agent' instead of 'Task' in Claude Code JSONL."""
+        records = [
+            {
+                "type": "assistant",
+                "message": {
+                    "id": "msg_a1",
+                    "content": [
+                        {"type": "tool_use", "id": "toolu_agent1", "name": "Agent",
+                         "input": {
+                             "description": "Explore codebase",
+                             "prompt": "Look at the files...",
+                             "subagent_type": "Explore",
+                         }}
+                    ],
+                    "usage": {},
+                },
+            },
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "toolu_agent1",
+                         "content": [
+                             {"type": "text", "text": "Found 5 files."},
+                             {"type": "text",
+                              "text": "agentId: af54a0eeda4518ec6\n<usage>total_tokens: 5000\ntool_uses: 3\nduration_ms: 30000</usage>"},
+                         ]}
+                    ],
+                },
+                "toolUseResult": {"status": "completed"},
+            },
+        ]
+        subagents = extract_subagents(records)
+        self.assertEqual(len(subagents), 1)
+        self.assertEqual(subagents[0]["description"], "Explore codebase")
+        self.assertEqual(subagents[0]["subagent_type"], "Explore")
+        self.assertEqual(subagents[0]["agent_id"], "af54a0eeda4518ec6")
+
     def test_no_subagents(self):
         records = [{"type": "user", "message": {"content": "hello"}}]
         self.assertEqual(extract_subagents(records), [])
