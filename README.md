@@ -31,6 +31,7 @@ Copy skill folders into `.claude/skills/` in your project or `~/.claude/skills/`
 | Skill | Description |
 |-------|-------------|
 | [research-workflow](skills/research-workflow/) | Search-first research with parallel subagent source gathering. Never guess from training data on verifiable questions. |
+| [session-analyst](skills/session-analyst/) | Analyzes session transcripts to review skill, agent, and user performance. Produces structured reports with findings, suggestions, and gap analysis. |
 
 ## Adding Skills
 
