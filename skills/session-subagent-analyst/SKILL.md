@@ -67,24 +67,28 @@ After analysis, create the output directory and write two files. Use the output 
 mkdir -p <output-directory>
 ```
 
-**Write `LEARNINGS.md`:**
+**CRITICAL: Copy the header and entry format EXACTLY as shown below. Do not rename fields, change capitalization, add `.md` to titles, or alter punctuation.**
 
-```markdown
+**Write `LEARNINGS.md`** — header MUST be exactly these 6 lines:
+
+```
 # Learnings
-
+                                          ← blank line
 **Session**: <session_id>
 **Project**: <project-name>
 **Project-Path**: <project-path>
-**Analyzed**: <ISO-8601 timestamp>
+**Analyzed**: <YYYY-MM-DD>
+```
 
----
+Then `---` separator, then entries. Each entry MUST use this exact structure:
 
+```
 ## [LRN-YYYYMMDD-XXX] <category>
 
 **Priority**: low | medium | high
 **Status**: pending
 **Area**: <area>
-**Occurrences**: <number of times observed in this session>
+**Occurrences**: <N>
 
 ### Summary
 <one-line finding>
@@ -98,28 +102,28 @@ mkdir -p <output-directory>
 - Context: <the situation>
 
 ---
-
-(repeat for each learning)
 ```
 
-**Write `ERRORS.md`:**
+**Write `ERRORS.md`** — header MUST be exactly these 6 lines:
 
-```markdown
+```
 # Errors
-
+                                          ← blank line
 **Session**: <session_id>
 **Project**: <project-name>
 **Project-Path**: <project-path>
-**Analyzed**: <ISO-8601 timestamp>
+**Analyzed**: <YYYY-MM-DD>
+```
 
----
+Then `---` separator, then entries. Each entry MUST use this exact structure:
 
+```
 ## [ERR-YYYYMMDD-XXX] <description>
 
 **Priority**: low | medium | high
 **Status**: pending
 **Area**: <area>
-**Occurrences**: <number of times this error occurred in this session>
+**Occurrences**: <N>
 
 ### Summary
 <what failed>
@@ -134,11 +138,17 @@ mkdir -p <output-directory>
 - Impact: <time/tokens/failures cost>
 
 ---
-
-(repeat for each error)
 ```
 
-**Empty results:** If no learnings found, write LEARNINGS.md with just the header (no entries). Same for errors.
+**Empty results:** If no learnings found, write LEARNINGS.md with just the header and `---` (no entries). Same for errors.
+
+**Common mistakes to avoid:**
+- Do NOT write `# Session Learnings` or `# LEARNINGS` — the title is `# Learnings`
+- Do NOT write `# Session Errors` or `# ERRORS` — the title is `# Errors`
+- Do NOT add `.md` to the title (not `# LEARNINGS.md`)
+- Do NOT use `Project Path` (no hyphen) — it is `Project-Path`
+- Do NOT use `**Date**:` — the field is `**Analyzed**:`
+- Do NOT use ISO-8601 with time (`2026-03-04T22:30:00Z`) — use date only (`2026-03-04`)
 
 **Re-scan behavior:** If the files already exist, overwrite them.
 
