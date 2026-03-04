@@ -35,6 +35,12 @@ class TestPathToProjectKey(unittest.TestCase):
             "-Users-me-work-myproject"
         )
 
+    def test_underscores_replaced(self):
+        self.assertEqual(
+            path_to_project_key("/Users/me/work/my_project"),
+            "-Users-me-work-my-project"
+        )
+
 
 class TestCountTurns(unittest.TestCase):
     def test_counts_human_messages(self):

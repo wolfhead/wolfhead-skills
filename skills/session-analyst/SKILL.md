@@ -54,7 +54,9 @@ This creates:
 
 ### 3. Dispatch Analysis Subagents
 
-For each condensed JSON file (both `main.json` and every `subagents/*.json`), dispatch one subagent using a cheap, fast model with average reasoning ability:
+For each condensed JSON file (both `main.json` and every `subagents/*.json`), dispatch one subagent using a cheap, fast model with average reasoning ability.
+
+**Before dispatching**, read `<skill-dir>/../session-subagent-analyst/SKILL.md` once and include its full body (after frontmatter) in every subagent prompt. Subagents cannot load skills on their own — the orchestrator must provide the instructions inline.
 
 ```
 Agent tool (model: cheap/fast):
@@ -65,8 +67,7 @@ Agent tool (model: cheap/fast):
     Context: This is part of a multi-session performance review.
     Parent session slug: <slug from metadata>
 
-    Use the session-subagent-analyst skill to guide your analysis.
-    Output only the JSON report.
+    <paste full session-subagent-analyst SKILL.md body here>
 ```
 
 Dispatch all subagents in parallel. Collect all JSON reports.

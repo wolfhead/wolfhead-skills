@@ -20,10 +20,11 @@ DEFAULT_MIN_TURNS = 3
 def path_to_project_key(project_path):
     """Convert a project directory path to Claude's project key format.
 
-    /Users/me/work/myproject -> -Users-me-work-myproject
+    /Users/me/work/my_project -> -Users-me-work-my-project
+    Claude replaces both / and _ with - in project keys.
     """
     normalized = project_path.rstrip("/")
-    return normalized.replace("/", "-")
+    return normalized.replace("/", "-").replace("_", "-")
 
 
 def count_turns(jsonl_path):
