@@ -77,12 +77,12 @@ Dispatch all subagents in parallel. Collect all JSON reports.
 
 ### 4. Synthesize Report
 
-Read all subagent JSON reports. Merge findings across all sessions into one unified report. Write to `docs/reviews/YYYY-MM-DD-sessions-review.md` (create directory if needed).
+Read all subagent JSON reports. Merge findings across all sessions into one unified report. Write to `~/.wolfhead_skills/claude-session-analyst/YYYY-MM-DD-<slug>-review.md` (create directory if needed). Use the session slug from metadata for the filename.
 
 **Merge rules:**
 - **Skill Suggestions**: Group by skill name. Deduplicate similar suggestions. Note frequency.
 - **Anti-patterns**: Group by pattern name. Count occurrences across sessions.
-- **User Preferences**: Only promote to the report if observed in 2+ sessions (single-session observations are noise).
+- **User Preferences**: Include all preferences from subagent reports. Preserve the `context` field. Distinguish between situational corrections (user redirected agent on a specific task) and durable preferences (user stated a general rule or corrected the same type of behavior across different tasks). Label each as `Situational` or `Durable` in the Type column.
 - **Gaps**: Deduplicate. Note frequency.
 - **Attribution**: When referencing where a finding was observed, use the `task_label` from subagent reports (e.g., "code review of extract_session.py") — never raw session IDs or agent IDs.
 
@@ -110,6 +110,7 @@ Read all subagent JSON reports. Merge findings across all sessions into one unif
 
 **<pattern-name>**: <description of recurring inefficiency>
 - Observed in: <N>/<total> sessions
+- Context: <the situation where this occurred>
 - Impact: <what it costs — time, tokens, failures>
 - Recommendation: <how to fix>
 
@@ -119,9 +120,9 @@ Read all subagent JSON reports. Merge findings across all sessions into one unif
 
 ## 3. User Preferences
 
-| Preference | Scope | Frequency | Suggested Entry |
-|-----------|-------|-----------|----------------|
-| <pattern> | Global/Project | <N>/<total> sessions | <what to add to CLAUDE.md or memory> |
+| Preference | Type | Scope | Frequency | Context | Suggested Entry |
+|-----------|------|-------|-----------|---------|----------------|
+| <pattern> | Situational/Durable | Global/Project | <N>/<total> sessions | <brief context> | <what to add to CLAUDE.md or memory> |
 
 (Omit entire section if none found.)
 

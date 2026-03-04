@@ -68,14 +68,16 @@ Output ONLY this JSON (no other text):
     {
       "pattern": "<short name>",
       "description": "<what happened>",
-      "impact": "<time/tokens/failures cost>"
+      "impact": "<time/tokens/failures cost>",
+      "context": "<the situation: what was the agent trying to do, what went wrong>"
     }
   ],
   "user_preferences": [
     {
       "preference": "<detected pattern>",
       "scope": "global|project",
-      "evidence": "<what you observed>"
+      "evidence": "<what you observed>",
+      "context": "<the situation: what was the task, what did the agent do, why did the user react>"
     }
   ],
   "gaps": [
@@ -90,27 +92,77 @@ Output ONLY this JSON (no other text):
 **Field rules:**
 - Omit keys with no findings entirely — do not include empty arrays
 - `skill_suggestions`: only include if there are actual non-trivial suggestions. "Skill worked fine" is not a suggestion.
-- `anti_patterns`: concrete patterns only. "Agent used Read" is not an anti-pattern. "Agent read the same 500-line file 4 times in one turn" is.
-- `user_preferences`: only include if evidence appears 2+ times in the session. One correction is not a preference.
+- `anti_patterns`: concrete patterns only. Always include `context` explaining the situation. "Agent used Read" is not an anti-pattern. "Agent read the same 500-line file 4 times in one turn" is.
+- `user_preferences`: report anything that signals a user preference. Always include `context` explaining the situation. See reporting criteria below.
 - `gaps`: only include if there was a clear situation where a skill would have helped and none exists.
 
-## Example
+## Reporting Criteria
 
-Input: A subsession where a subagent was asked to "Research Claude Code session format" and made 3 sequential WebSearch calls followed by 3 sequential WebFetch calls.
+### When to report a user preference:
+- User explicitly states a rule ("always use X", "I prefer Y", "don't do Z")
+- User corrects the agent's tool or workflow choice (e.g., used `gh` when project uses GitLab)
+- User interrupts or rejects an approach and redirects to a different one
+- User repeats the same type of correction across different tasks in the session
+- User expresses frustration, criticism, or disappointment about agent behavior
 
-Output:
+### When to report an anti-pattern:
+- Agent used the wrong tool for the job (sed instead of Edit, cat instead of Read)
+- Agent spent 3+ attempts or significant time on a failing approach
+- Agent kept dead/unused code or artifacts
+- Agent spawned a subagent for something a single tool call could handle
+- Agent repeated the same failing operation without changing approach
+
+### Do NOT report:
+- Normal tool usage ("agent used Read to read a file")
+- Successful operations that worked as expected
+- Style inferences from how the user writes ("user writes short messages" ≠ "user prefers brevity")
+
+## Examples
+
+### CORRECT — report like this:
+
+User preference with context:
 ```json
 {
-  "analysis_type": "subsession",
-  "file_analyzed": "/tmp/claude-session-analyst/sess-001/subagents/agent-abc123.json",
+  "preference": "Uses GitLab, not GitHub",
+  "scope": "project",
+  "evidence": "Agent ran `gh pr create`, user said 'this is GitLab'",
+  "context": "Agent assumed GitHub when creating a merge request. User corrected to use GitLab CLI instead."
+}
+```
+
+Anti-pattern with context:
+```json
+{
   "anti_patterns": [
     {
-      "pattern": "Sequential web research",
-      "description": "3 WebSearch calls followed by 3 WebFetch calls executed sequentially. All searches were independent and could have been dispatched in parallel.",
-      "impact": "Added ~45s wall-clock time. Parallel execution would reduce to ~15s."
+      "pattern": "Sed misuse on Dockerfile",
+      "description": "Used sed with pipe delimiters on a path containing /usr/lib/, causing 'bad flag in substitute command'",
+      "impact": "Tool error, had to rewrite entire file via cat >",
+      "context": "Editing a Dockerfile RUN command. Agent chose sed instead of Edit tool. Pipe delimiter conflicted with path slashes."
     }
   ]
 }
 ```
 
-Note: no `skill_suggestions`, `user_preferences`, or `gaps` keys because none were found.
+### INCORRECT — do NOT report like this:
+
+Missing context (rejected):
+```json
+{
+  "preference": "Prefers direct output over deep analysis",
+  "scope": "global",
+  "evidence": "User interrupted twice"
+}
+```
+Why rejected: No context. What was the user's original question? Why did they interrupt? Without this, the main analyst cannot distinguish a situational correction from a durable preference.
+
+Missing context on anti-pattern (rejected):
+```json
+{
+  "pattern": "Faketime rabbit hole",
+  "description": "Spent ~45min on approach that doesn't work",
+  "impact": "45 minutes wasted"
+}
+```
+Why rejected: No context. What was the agent trying to do? Why didn't it work? What was the eventual solution?

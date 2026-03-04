@@ -76,12 +76,12 @@ Dispatch all subagents in parallel. Collect all JSON reports.
 
 ### 4. Synthesize Report
 
-Read all subagent JSON reports. Merge findings across all sessions into one unified report. Write to `docs/reviews/YYYY-MM-DD-openclaw-sessions-review.md`.
+Read all subagent JSON reports. Merge findings across all sessions into one unified report. Write to `~/.wolfhead_skills/openclaw-session-analyst/YYYY-MM-DD-<slug>-review.md` (create directory if needed). Use the session slug or agent ID from metadata for the filename.
 
 **Merge rules:**
 - **Cost Analysis**: Aggregate cost_by_model across sessions. Identify most/least expensive sessions.
 - **Anti-patterns**: Group by pattern name. Count occurrences across sessions.
-- **User Preferences**: Only promote if observed in 2+ sessions.
+- **User Preferences**: Include all preferences from subagent reports. Preserve the `context` field. Distinguish between situational corrections and durable preferences. Label each as `Situational` or `Durable` in the Type column.
 - **Gaps**: Deduplicate. Note frequency.
 - **Attribution**: Use `task_label` from subagent reports — never raw session IDs.
 
@@ -109,6 +109,7 @@ Read all subagent JSON reports. Merge findings across all sessions into one unif
 
 **<pattern-name>**: <description>
 - Observed in: <N>/<total> sessions
+- Context: <the situation where this occurred>
 - Impact: <time/tokens/cost>
 - Recommendation: <fix>
 
@@ -118,9 +119,9 @@ Read all subagent JSON reports. Merge findings across all sessions into one unif
 
 ## 3. User Preferences
 
-| Preference | Scope | Frequency | Suggested Entry |
-|-----------|-------|-----------|----------------|
-| <pattern> | Global/Project | <N>/<total> sessions | <what to add to config or memory> |
+| Preference | Type | Scope | Frequency | Context | Suggested Entry |
+|-----------|------|-------|-----------|---------|----------------|
+| <pattern> | Situational/Durable | Global/Project | <N>/<total> sessions | <brief context> | <what to add to config or memory> |
 
 (Omit entire section if none found.)
 
