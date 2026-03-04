@@ -20,9 +20,11 @@ Read the condensed JSON file path from your prompt. The file contains:
 
 ## Determine Analysis Type
 
-Check the file path or metadata to determine type:
-- **Main session** (`main.json` or no `agentId` in records): Use the Main Session Checklist
-- **Subsession** (`subagents/*.json` or `agentId` present): Use the Subsession Checklist
+Decision tree:
+1. If file path contains `subagents/` → **Subsession** (use Subsession Checklist)
+2. If file path ends with `main.json` → **Main session** (use Main Session Checklist)
+3. If metadata contains `agentId` field → **Subsession**
+4. Otherwise → **Main session**
 
 ## Main Session Checklist
 
@@ -40,7 +42,7 @@ Check each item. Only report findings — skip items with nothing notable.
 Check each item. Only report findings — skip items with nothing notable.
 
 - [ ] **Task completion**: Did the subagent accomplish what it was asked to do? Check the first human message (the task) against the final output.
-- [ ] **Doom loop**: Are there 3+ consecutive identical or near-identical tool calls with the same error? Flag with the tool name and error.
+- [ ] **Doom loop**: Are there 3+ consecutive calls to the same tool with the same arguments producing the same error? Flag with the tool name and error. (Different arguments = different attempts, not a loop.)
 - [ ] **Redundant operations**: Same file read multiple times? Overlapping search queries? Sequential operations that could be parallel?
 - [ ] **Tool failures**: List each `is_error: true` result. Did the subagent recover or get stuck?
 - [ ] **Skill compliance**: If a skill was invoked, did the subagent follow its documented steps? "deviated" = skipped steps or ignored instructions.
@@ -85,7 +87,7 @@ Output ONLY this JSON (no other text):
 ```
 
 **Field rules:**
-- Omit empty arrays (if no anti_patterns found, don't include the key)
+- Omit keys with no findings entirely — do not include empty arrays
 - `skill_suggestions`: only include if there are actual non-trivial suggestions. "Skill worked fine" is not a suggestion.
 - `anti_patterns`: concrete patterns only. "Agent used Read" is not an anti-pattern. "Agent read the same 500-line file 4 times in one turn" is.
 - `user_preferences`: only include if evidence appears 2+ times in the session. One correction is not a preference.
