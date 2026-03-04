@@ -82,6 +82,7 @@ mkdir -p <output-directory>
 **Priority**: low | medium | high
 **Status**: pending
 **Area**: <area>
+**Occurrences**: <number of times observed in this session>
 
 ### Summary
 <one-line finding>
@@ -116,6 +117,7 @@ mkdir -p <output-directory>
 **Priority**: low | medium | high
 **Status**: pending
 **Area**: <area>
+**Occurrences**: <number of times this error occurred in this session>
 
 ### Summary
 <what failed>
