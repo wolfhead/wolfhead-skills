@@ -136,6 +136,13 @@ class TestClassifyRecord(unittest.TestCase):
         rec = {"type": "saved_hook_context"}
         self.assertEqual(classify_record(rec), "skip")
 
+    def test_list_content_without_tool_result(self):
+        """A user message with list content but no tool_result items is human_message."""
+        rec = {"type": "user", "message": {"role": "user", "content": [
+            {"type": "text", "text": "some text"}
+        ]}}
+        self.assertEqual(classify_record(rec), "human_message")
+
 
 class TestIsMainSession(unittest.TestCase):
     def test_main_session(self):
@@ -179,6 +186,16 @@ class TestIsMainSession(unittest.TestCase):
                 {"type": "user", "message": {"content": "hello"}},
             ])
             self.assertTrue(is_main_session(path))
+
+    def test_all_malformed_jsonl(self):
+        """A file with only malformed JSON lines should return False."""
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "bad.jsonl")
+            with open(path, "w") as f:
+                f.write("not json at all\n")
+                f.write("{broken\n")
+                f.write("also bad}\n")
+            self.assertFalse(is_main_session(path))
 
 
 # =========================================================================
@@ -280,6 +297,24 @@ class TestExtractMetadata(unittest.TestCase):
         self.assertIsNone(meta["session_id"])
         self.assertEqual(meta["input_tokens"], 0)
         self.assertEqual(meta["turn_count"], 0)
+
+    def test_usage_non_dict(self):
+        """Non-dict usage field should not crash token accumulation."""
+        records = [
+            {
+                "type": "assistant",
+                "timestamp": "2026-02-09T03:18:12.000Z",
+                "message": {
+                    "model": "claude-opus-4-6",
+                    "id": "msg_bad_usage",
+                    "content": [{"type": "text", "text": "hi"}],
+                    "usage": "not-a-dict",
+                },
+            },
+        ]
+        meta = extract_metadata(records)
+        self.assertEqual(meta["input_tokens"], 0)
+        self.assertEqual(meta["output_tokens"], 0)
 
 
 # =========================================================================

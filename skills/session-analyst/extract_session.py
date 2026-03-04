@@ -47,8 +47,10 @@ def classify_record(record):
         msg = record.get("message", {})
         content = msg.get("content")
         if isinstance(content, list):
-            # tool_result feedback
-            return "tool_result"
+            # Only classify as tool_result if at least one item is a tool_result
+            if any(isinstance(item, dict) and item.get("type") == "tool_result" for item in content):
+                return "tool_result"
+            return "human_message"
         return "human_message"
 
     if rtype == "assistant":
@@ -165,10 +167,11 @@ def extract_metadata(records):
             if meta["model"] is None and msg.get("model"):
                 meta["model"] = msg["model"]
             usage = msg.get("usage", {})
-            meta["input_tokens"] += usage.get("input_tokens", 0)
-            meta["output_tokens"] += usage.get("output_tokens", 0)
-            meta["cache_read_tokens"] += usage.get("cache_read_input_tokens", 0)
-            meta["cache_creation_tokens"] += usage.get("cache_creation_input_tokens", 0)
+            if isinstance(usage, dict):
+                meta["input_tokens"] += usage.get("input_tokens", 0)
+                meta["output_tokens"] += usage.get("output_tokens", 0)
+                meta["cache_read_tokens"] += usage.get("cache_read_input_tokens", 0)
+                meta["cache_creation_tokens"] += usage.get("cache_creation_input_tokens", 0)
 
         # Turn durations
         if rec.get("type") == "system" and rec.get("subtype") == "turn_duration":
@@ -184,8 +187,12 @@ def extract_metadata(records):
 # Task 4 — Conversation flow
 # ---------------------------------------------------------------------------
 
-def _get_tool_name_for_tool_use_id(records, tool_use_id):
-    """Find the tool name for a given tool_use_id by searching assistant records."""
+def _build_tool_name_map(records):
+    """Build a dict mapping tool_use_id -> tool_name from assistant records.
+
+    Scans all assistant records once (O(N)) so callers avoid repeated O(N) lookups.
+    """
+    tool_map = {}
     for rec in records:
         if rec.get("type") != "assistant":
             continue
@@ -193,9 +200,9 @@ def _get_tool_name_for_tool_use_id(records, tool_use_id):
         if not isinstance(content, list):
             continue
         for block in content:
-            if block.get("type") == "tool_use" and block.get("id") == tool_use_id:
-                return block.get("name", "unknown")
-    return "unknown"
+            if block.get("type") == "tool_use":
+                tool_map[block.get("id", "")] = block.get("name", "unknown")
+    return tool_map
 
 
 def _truncate(text, max_len=500):
@@ -234,6 +241,7 @@ def extract_conversation(records):
     - {"type": "tool_result", "tool_use_id": "...", "tool_name": "...", "is_error": bool, "content_preview": "..."}
     """
     turns = []
+    tool_name_map = _build_tool_name_map(records)
 
     # Group assistant records by message.id
     # We process records in order and emit turns sequentially
@@ -307,7 +315,7 @@ def extract_conversation(records):
                 tool_use_id = item.get("tool_use_id", "")
                 is_error = item.get("is_error", False)
                 raw_content = _extract_tool_result_content(item.get("content", ""))
-                tool_name = _get_tool_name_for_tool_use_id(records, tool_use_id)
+                tool_name = tool_name_map.get(tool_use_id, "unknown")
                 turns.append({
                     "type": "tool_result",
                     "tool_use_id": tool_use_id,
@@ -403,12 +411,6 @@ def extract_subagents(records):
         if cat != "tool_result":
             continue
 
-        # Check toolUseResult for status and agentId
-        tur = rec.get("toolUseResult", {})
-        if isinstance(tur, dict):
-            # Try to match by finding the tool_use_id in the content
-            pass
-
         content = rec.get("message", {}).get("content", [])
         if not isinstance(content, list):
             continue
@@ -421,7 +423,8 @@ def extract_subagents(records):
 
             entry = task_calls[tuid]
 
-            # Extract agentId from toolUseResult
+            # Extract agentId/status from toolUseResult (scoped per item match)
+            tur = rec.get("toolUseResult", {})
             if isinstance(tur, dict):
                 if tur.get("agentId"):
                     entry["agent_id"] = tur["agentId"]
@@ -430,8 +433,8 @@ def extract_subagents(records):
 
             # Parse agent_id, duration, tokens from text content
             raw = _extract_tool_result_content(item.get("content", ""))
-            # agentId pattern: "agentId: <hex>"
-            m = re.search(r"agentId:\s*([a-f0-9]+)", raw)
+            # agentId pattern: "agentId: <hex or UUID>"
+            m = re.search(r"agentId:\s*([a-fA-F0-9][a-fA-F0-9\-]+)", raw)
             if m and not entry["agent_id"]:
                 entry["agent_id"] = m.group(1)
             # duration pattern: "duration_ms: <number>"
@@ -445,10 +448,7 @@ def extract_subagents(records):
 
             # Status from toolUseResult or infer from content
             if not entry["status"]:
-                if tur and isinstance(tur, dict) and tur.get("status"):
-                    entry["status"] = tur["status"]
-                else:
-                    entry["status"] = "completed"
+                entry["status"] = "completed"
 
     return list(task_calls.values())
 
@@ -458,6 +458,7 @@ def extract_tool_failures(records):
 
     Returns list of dicts with: tool_use_id, tool_name, content_preview.
     """
+    tool_name_map = _build_tool_name_map(records)
     failures = []
     for rec in records:
         cat = classify_record(rec)
@@ -475,7 +476,7 @@ def extract_tool_failures(records):
                 continue
             tuid = item.get("tool_use_id", "")
             raw = _extract_tool_result_content(item.get("content", ""))
-            tool_name = _get_tool_name_for_tool_use_id(records, tuid)
+            tool_name = tool_name_map.get(tuid, "unknown")
             failures.append({
                 "tool_use_id": tuid,
                 "tool_name": tool_name,
