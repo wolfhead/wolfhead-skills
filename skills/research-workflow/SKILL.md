@@ -39,40 +39,56 @@ Before spawning subagents, clarify internally:
 
 If the question is ambiguous, ask the user one clarifying question before searching.
 
-### 2. Fan Out — Parallel Subagent Research
+### 2. Scout — Discover Sources
 
-Spawn 2-4 subagents using cheap models (DeepSeek, Haiku). Each targets a different source type:
+Spawn one scout subagent (cheap model) to find the right sources for this topic. The scout does NOT extract information — it only identifies where to look.
 
-| Subagent | Focus | What to search |
-|----------|-------|----------------|
-| A | Official sources | Project docs, changelogs, release notes, official blogs |
-| B | Code & repos | GitHub repos, issues, discussions, pull requests |
-| C | Community | Forums, blog posts, Stack Overflow, Reddit, Dev.to |
-| D | (Complex topics only) | Code samples, implementations, tutorials |
-
-**Subagent instructions template:**
+**Scout instructions:**
 
 ```
-Search for: [specific question]
-Focus on: [source type]
+Topic: [the question]
+Task: Find 3-6 specific sources relevant to this topic.
+For each source, return:
+  - URL or identifier (e.g., GitHub repo URL, docs page URL, specific forum thread)
+  - What type of source it is (official docs, GitHub repo, blog post, forum thread)
+  - Why it's likely relevant
+Do NOT read or summarize the sources. Just find them.
+```
+
+The scout searches broadly (web search, GitHub search) so that the extraction subagents don't have to.
+
+### 3. Extract — Targeted Subagents Per Source
+
+Take the scout's source list and spawn one subagent per source (cheap model, in parallel). Each subagent gets a specific URL or location and a specific question to answer from that source.
+
+**Extraction subagent instructions:**
+
+```
+Source: [specific URL or location from scout]
+Question: [what to extract from this source]
+Task: Read this specific source and extract facts relevant to the question.
 Return: Raw facts only. No conclusions or opinions.
-Include: Where each fact came from (so I can cross-reference).
-If nothing relevant found: Say so explicitly. Do not guess.
+If the source is inaccessible or irrelevant: Say so. Do not guess.
 ```
 
-Scale subagent count to complexity:
-- Simple factual check (e.g., "does X support Y?") → 2 subagents
-- Multi-faceted topic (e.g., "how does X compare to Y?") → 3-4 subagents
+Every extraction subagent has a guided, specific job:
+- A specific source to read (not "search the web")
+- A specific question to answer from that source
+- No freedom to wander or draw conclusions
 
-### 3. Synthesize
+Scale to the scout's findings:
+- Scout found 2-3 good sources → 2-3 extraction subagents
+- Scout found 5-6 sources → pick the 3-4 most relevant, skip the rest
 
-Cross-reference all subagent findings with the stronger model:
+### 4. Synthesize
+
+Cross-reference all extraction subagent findings with the stronger model:
 
 - **Sources agree** → High confidence. State the answer directly.
 - **Sources disagree** → Tell the user. Present both positions. Do not silently pick one.
 - **Gaps found** → State what could not be verified. Do not fill gaps with training data.
 
-### 4. Deliver
+### 5. Deliver
 
 Give the answer:
 - Direct and confident when sources agree
@@ -91,7 +107,8 @@ Give the answer:
 | Silently pick one conflicting source | Tell the user sources disagree |
 | Dump a list of URLs | Just give the correct answer |
 | "I couldn't find anything" then guess from training data | State the gap, stop there |
-| Spawn subagents that draw conclusions | Subagents return raw facts only |
+| Subagents do broad unfocused searching | Scout finds sources, extractors read specific URLs |
+| Subagents draw conclusions | Subagents return raw facts only |
 
 ## Example
 
@@ -103,7 +120,20 @@ Give the answer:
 (Confident, wrong — answered from stale training data without checking.)
 
 **Right approach:**
-1. Scope: Need to verify current cross-compatibility between OpenClaw SKILL.md and Claude Code
-2. Spawn 2 subagents — one searches official docs/repos, one searches community posts
-3. Findings: acpx supports pasting skills into any ACP harness; SKILL.md format works across platforms because skills are instructions, not executable code
-4. Answer: "Yes — skills in SKILL.md format work across OpenClaw, Claude Code, and other ACP harnesses. They're markdown instructions that agents adapt to their runtime, so the same skill file works on multiple platforms."
+
+1. **Scope:** Need to verify current cross-compatibility between OpenClaw SKILL.md and Claude Code
+
+2. **Scout:** Spawn scout subagent → finds sources:
+   - `https://github.com/openclaw/openclaw` (official repo)
+   - `https://github.com/anthropics/claude-code` (Claude Code docs)
+   - `https://github.com/jdrhyne/agent-skills` (cross-agent skills project)
+   - A blog post comparing the two platforms
+
+3. **Extract:** Spawn 3 targeted subagents:
+   - Subagent A → read OpenClaw repo for skill format docs
+   - Subagent B → read Claude Code docs for skill loading mechanism
+   - Subagent C → read agent-skills repo for cross-compatibility evidence
+
+4. **Synthesize:** All three confirm SKILL.md works across platforms — skills are instructions, not executable code
+
+5. **Answer:** "Yes — skills in SKILL.md format work across OpenClaw, Claude Code, and other ACP harnesses. They're markdown instructions that agents adapt to their runtime, so the same skill file works on multiple platforms."
