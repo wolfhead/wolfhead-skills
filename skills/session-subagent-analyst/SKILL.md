@@ -142,13 +142,6 @@ Then `---` separator, then entries. Each entry MUST use this exact structure:
 
 **Empty results:** If no learnings found, write LEARNINGS.md with just the header and `---` (no entries). Same for errors.
 
-**Common mistakes to avoid:**
-- Do NOT write `# Session Learnings` or `# LEARNINGS` — the title is `# Learnings`
-- Do NOT write `# Session Errors` or `# ERRORS` — the title is `# Errors`
-- Do NOT add `.md` to the title (not `# LEARNINGS.md`)
-- Do NOT use `Project Path` (no hyphen) — it is `Project-Path`
-- Do NOT use `**Date**:` — the field is `**Analyzed**:`
-- Do NOT use ISO-8601 with time (`2026-03-04T22:30:00Z`) — use date only (`2026-03-04`)
 
 **Re-scan behavior:** If the files already exist, overwrite them.
 
