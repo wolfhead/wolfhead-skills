@@ -959,6 +959,14 @@ class TestExtractSubsession(unittest.TestCase):
         result = extract_subsession("/nonexistent/path/agent-abc.jsonl")
         self.assertIsNone(result)
 
+    def test_returns_none_for_empty_file(self):
+        """extract_subsession should return None for an empty file."""
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "agent-empty.jsonl")
+            open(path, "w").close()
+            result = extract_subsession(path)
+            self.assertIsNone(result)
+
 
 class TestOutputDir(unittest.TestCase):
     def test_output_dir_creates_structure(self):
@@ -1046,6 +1054,10 @@ class TestOutputDir(unittest.TestCase):
                 main_data = json.load(f)
             self.assertIn("metadata", main_data)
             self.assertEqual(main_data["metadata"]["session_id"], session_id)
+
+            # Check subagent_outputs in main.json
+            self.assertIn("subagent_outputs", main_data)
+            self.assertEqual(len(main_data["subagent_outputs"]), 1)
 
             # Check subagent JSON exists
             sub_json_path = os.path.join(output_dir, "subagents", "agent-ab72d42.json")

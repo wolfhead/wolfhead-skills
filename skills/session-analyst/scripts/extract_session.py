@@ -636,14 +636,8 @@ def main():
         out_dir = Path(args.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write main.json
-        main_path = out_dir / "main.json"
-        with open(main_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-            f.write("\n")
-        print(f"Written to {main_path}", file=sys.stderr)
-
-        # Write subagent JSONs
+        # Write subagent JSONs first so we can collect output paths
+        subagent_outputs = []
         subagent_files = find_subagent_files(args.session)
         if subagent_files:
             subagents_out = out_dir / "subagents"
@@ -655,7 +649,16 @@ def main():
                     with open(sub_out_path, "w", encoding="utf-8") as f:
                         json.dump(sub_result, f, indent=2, ensure_ascii=False)
                         f.write("\n")
+                    subagent_outputs.append(str(sub_out_path))
                     print(f"Written to {sub_out_path}", file=sys.stderr)
+
+        # Write main.json with subagent_outputs list
+        result["subagent_outputs"] = subagent_outputs
+        main_path = out_dir / "main.json"
+        with open(main_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        print(f"Written to {main_path}", file=sys.stderr)
     else:
         output_json = json.dumps(result, indent=2, ensure_ascii=False)
 
