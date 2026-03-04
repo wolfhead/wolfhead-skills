@@ -58,9 +58,9 @@ For each condensed JSON file (both `main.json` and every `subagents/*.json`), di
 
 **Before dispatching**, read `<skill-dir>/../session-subagent-analyst/SKILL.md` once and store its full body (everything after the YAML frontmatter). Include this content in every subagent prompt. Subagents cannot load skills on their own — the orchestrator must provide the instructions inline.
 
-Use the Agent tool with these exact parameters:
+Use the Agent tool with these parameters:
 - `subagent_type`: `"general-purpose"` (NOT `session-subagent-analyst` — that is a skill, not an agent type)
-- `model`: `"haiku"` (cheap/fast model for analysis work)
+- `model`: Pick a model that can follow a checklist, read JSON, and produce structured JSON output. Needs reliable instruction-following but not deep reasoning.
 - `description`: `"Analyze <main|subagent> <session-id>"`
 - `prompt`: Include the file path, context, and the full sub-skill instructions:
 
