@@ -37,6 +37,20 @@ Decision tree:
 3. If metadata contains `agentId` field → **Subsession**
 4. Otherwise → **Main session**
 
+## Concepts
+
+**Learning (LRN)**: Something the agent should do differently next time. Forward-looking behavioral observation. The value is the rule it teaches. Categories:
+- `best_practice` — agent used a suboptimal approach; a better one exists (e.g., used sed instead of Edit, spawned subagent for a single tool call)
+- `correction` — user explicitly corrected the agent's behavior or output
+- `knowledge_gap` — agent lacked knowledge that a skill or specialization could provide
+- `insight` — non-trivial suggestion for improving skills or workflows
+
+**Error (ERR)**: An actual failure that produced error output and cost time/tokens. Backward-looking incident record. The value is the impact assessment. Examples:
+- Command returned non-zero exit code
+- Tool call returned `is_error: true`
+- API returned an error response
+- Agent hit a doom loop (3+ attempts at same failing operation)
+
 ## Main Session Checklist
 
 Check each item. Only report findings — skip items with nothing notable.
@@ -47,17 +61,6 @@ Check each item. Only report findings — skip items with nothing notable.
 - [ ] **Rejected interactions**: Were any AskUserQuestion or tool calls rejected by the user? What does this suggest?
 - [ ] **Flow efficiency**: How many turns? Were subagents spawned unnecessarily (task could have been a direct tool call)? Token usage proportional to task complexity?
 - [ ] **Gaps**: Were there situations where a skill or agent specialization was clearly missing?
-
-## Subsession Checklist
-
-Check each item. Only report findings — skip items with nothing notable.
-
-- [ ] **Task completion**: Did the subagent accomplish what it was asked to do? Check the first human message (the task) against the final output.
-- [ ] **Doom loop**: Are there 3+ consecutive calls to the same tool with the same arguments producing the same error? Flag with the tool name and error. (Different arguments = different attempts, not a loop.)
-- [ ] **Redundant operations**: Same file read multiple times? Overlapping search queries? Sequential operations that could be parallel?
-- [ ] **Tool failures**: List each `is_error: true` result. Did the subagent recover or get stuck?
-- [ ] **Skill compliance**: If a skill was invoked, did the subagent follow its documented steps? "deviated" = skipped steps or ignored instructions.
-- [ ] **Token efficiency**: Compare output tokens to task complexity. Flag if output seems 5x+ more than the task warrants (e.g., simple lookup generating 10k tokens).
 
 ## Output — Write Files Directly
 
@@ -146,10 +149,12 @@ Then `---` separator, then entries. Each entry MUST use this exact structure:
 **Re-scan behavior:** If the files already exist, overwrite them.
 
 **Category mapping from checklist items:**
-- User corrections / preferences → LRN entries with category `best_practice`
-- Skill suggestions → LRN entries with category `insight`
-- Gaps → LRN entries with category `knowledge_gap`
-- Anti-patterns / tool failures / doom loops → ERR entries
+- User corrections / preferences → LRN with category `best_practice`
+- Suboptimal approaches (wrong tool, unnecessary subagents) → LRN with category `best_practice`
+- Skill suggestions → LRN with category `insight`
+- Gaps (missing skill or specialization) → LRN with category `knowledge_gap`
+- Tool failures (`is_error: true`, non-zero exit) → ERR
+- Doom loops (3+ attempts at same failing operation) → ERR
 
 **Field rules:**
 - LRN entries with category `insight`: only include if there are actual non-trivial suggestions. "Skill worked fine" is not a suggestion.
@@ -166,12 +171,18 @@ Then `---` separator, then entries. Each entry MUST use this exact structure:
 - User repeats the same type of correction across different tasks in the session
 - User expresses frustration, criticism, or disappointment about agent behavior
 
-### When to report an anti-pattern:
+### When to report a best_practice learning:
 - Agent used the wrong tool for the job (sed instead of Edit, cat instead of Read)
-- Agent spent 3+ attempts or significant time on a failing approach
-- Agent kept dead/unused code or artifacts
 - Agent spawned a subagent for something a single tool call could handle
+- Agent kept dead/unused code or artifacts
+- User corrects the agent's tool or workflow choice
+- User interrupts or rejects an approach and redirects to a different one
+
+### When to report an error:
+- Tool call returned `is_error: true` or command returned non-zero exit code
+- Agent spent 3+ attempts on a failing approach without changing strategy
 - Agent repeated the same failing operation without changing approach
+- API or external service returned an error that cost significant time
 
 ### Do NOT report:
 - Normal tool usage ("agent used Read to read a file")
@@ -204,25 +215,49 @@ Agent ran `gh pr create`, user corrected: "this is GitLab". Agent assumed GitHub
 ---
 ```
 
-Anti-pattern with context (ERR entry):
+Suboptimal approach with context (LRN entry):
 ```markdown
-## [ERR-20260304-001] Sed misuse on Dockerfile
+## [LRN-20260304-002] best_practice
 
 **Priority**: medium
 **Status**: pending
 **Area**: backend
+**Occurrences**: 1
 
 ### Summary
-Used sed with pipe delimiters on a path containing /usr/lib/, causing 'bad flag in substitute command'
+Use Edit tool instead of sed for file modifications
 
-### Error
-bad flag in substitute command
-
-### Context
-Editing a Dockerfile RUN command. Agent chose sed instead of Edit tool. Pipe delimiter conflicted with path slashes. Had to rewrite entire file via cat >.
+### Details
+Agent used sed with pipe delimiters on a Dockerfile path containing /usr/lib/, causing 'bad flag in substitute command'. The Edit tool handles paths correctly and is the preferred approach.
 
 ### Metadata
-- Impact: Tool error, had to rewrite entire file
+- Category: best_practice
+- Evidence: Agent ran sed, got 'bad flag in substitute command'
+- Context: Editing a Dockerfile RUN command. Sed delimiter conflicted with path slashes.
+
+---
+```
+
+Error with context (ERR entry):
+```markdown
+## [ERR-20260304-001] npm install failure
+
+**Priority**: medium
+**Status**: pending
+**Area**: config
+**Occurrences**: 2
+
+### Summary
+npm install failed — project uses pnpm, not npm
+
+### Error
+npm ERR! ERESOLVE could not resolve
+
+### Context
+Agent attempted `npm install` to add a dependency. Project uses pnpm workspaces with pnpm-lock.yaml. Command failed with dependency resolution error. Agent then tried `pnpm install` which succeeded.
+
+### Metadata
+- Impact: 1 failed command, ~30s wasted
 
 ---
 ```
