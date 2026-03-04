@@ -46,22 +46,21 @@ python3 <skill-dir>/scripts/extract_session.py <session.jsonl> --output-dir /tmp
 This creates:
 ```
 /tmp/claude-session-analyst/<session-id>/
-├── main.json              # Main session condensed data
-├── subagents/
-│   ├── agent-xxx.json     # Condensed subsession data
+├── main.json              # Main session condensed data (includes subagent summaries)
+├── subagents/             # Individual subsession data (not analyzed separately)
 │   └── ...
 ```
 
 ### 3. Dispatch Analysis Subagents
 
-For each condensed JSON file (both `main.json` and every `subagents/*.json`), dispatch one analysis subagent.
+For each session, dispatch **one** analysis subagent for `main.json` only. Do not analyze individual subsession files — the main session's condensed JSON already includes subagent invocation details, tool failures, and token usage. Analyzing subsessions separately multiplies cost (a session with 16 subagents would need 17 analysis agents) with little additional insight.
 
 **Before dispatching**, read `<skill-dir>/../session-subagent-analyst/SKILL.md` once and store its full body (everything after the YAML frontmatter). Include this content in every subagent prompt. Subagents cannot load skills on their own — the orchestrator must provide the instructions inline.
 
 Use the Agent tool with these parameters:
 - `subagent_type`: `"general-purpose"` (NOT `session-subagent-analyst` — that is a skill, not an agent type)
 - `model`: Pick a model that can follow a checklist, read JSON, and produce structured markdown output. Needs reliable instruction-following but not deep reasoning.
-- `description`: `"Analyze <main|subagent> <session-id>"`
+- `description`: `"Analyze session <session-id>"`
 - `prompt`: Include the file path, context, and the full sub-skill instructions:
 
 ```
@@ -75,7 +74,7 @@ Parent session slug: <slug from metadata>
 
 **Do NOT use `run_in_background: true`.** Dispatch subagents in foreground so their results are returned directly. Background agents auto-complete and get cleaned up — calling `TaskOutput` on an already-completed background agent returns "No task found", which cascades as "Sibling tool call errored" to all parallel siblings.
 
-**Batch by session** — dispatch all subagents for one session (main + its subsessions) together in one parallel foreground call, collect results, then move to the next session. This keeps each batch small (typically 1-5 agents) and avoids the cascading failure from large batches.
+Dispatch all session analysis agents in one parallel foreground call (one agent per session). Since each session only needs one agent now, the batch size equals the number of sessions (typically 1-5).
 
 **Error handling:** If a subagent fails, retry it once individually (not in a batch). If it fails again, skip it and note in the output that the file was not analyzed.
 
@@ -83,15 +82,13 @@ Collect all markdown reports.
 
 ### 4. Write Per-Session Output
 
-For each session analyzed, collect **all** subagent output (from the main session analysis AND every subsession analysis) and write combined results to a single per-session directory keyed by the **main session ID**.
+For each session analyzed, collect the analysis subagent's output and write it to a per-session directory.
 
-**Output directory:** `~/.wolfhead_skills/claude-session-analyst/<main_session_id>/`
-
-Each session from step 1 produces one directory — all findings from `main.json` and every `subagents/*.json` are merged into that directory's files.
+**Output directory:** `~/.wolfhead_skills/claude-session-analyst/<session_id>/`
 
 Create the directory:
 ```bash
-mkdir -p ~/.wolfhead_skills/claude-session-analyst/<main_session_id>
+mkdir -p ~/.wolfhead_skills/claude-session-analyst/<session_id>
 ```
 
 **Determine project metadata** from the session's condensed JSON (`main.json` metadata):
@@ -100,7 +97,7 @@ mkdir -p ~/.wolfhead_skills/claude-session-analyst/<main_session_id>
 
 **Write `LEARNINGS.md`:**
 
-Combine all LRN entries from all subagent outputs (main session + all subsessions) into one file. Prepend the file header:
+Take all LRN entries from the analysis subagent's output. Prepend the file header:
 
 ```markdown
 # Learnings
@@ -117,7 +114,7 @@ Combine all LRN entries from all subagent outputs (main session + all subsession
 
 **Write `ERRORS.md`:**
 
-Combine all ERR entries from all subagent outputs (main session + all subsessions) into one file. Prepend the file header:
+Take all ERR entries from the analysis subagent's output. Prepend the file header:
 
 ```markdown
 # Errors
