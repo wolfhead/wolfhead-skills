@@ -56,6 +56,7 @@ Output ONLY this JSON (no other text):
 {
   "analysis_type": "main_session|subsession",
   "file_analyzed": "<path to the file you read>",
+  "task_label": "<short human-readable label derived from the first human message, e.g. 'code review of extract_session.py' or 'research Claude session format'>",
   "skill_suggestions": [
     {
       "skill_name": "<name>",

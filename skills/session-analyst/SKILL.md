@@ -84,6 +84,7 @@ Read all subagent JSON reports. Merge findings across all sessions into one unif
 - **Anti-patterns**: Group by pattern name. Count occurrences across sessions.
 - **User Preferences**: Only promote to the report if observed in 2+ sessions (single-session observations are noise).
 - **Gaps**: Deduplicate. Note frequency.
+- **Attribution**: When referencing where a finding was observed, use the `task_label` from subagent reports (e.g., "code review of extract_session.py") — never raw session IDs or agent IDs.
 
 ## Report Template
 
