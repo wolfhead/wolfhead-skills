@@ -1,1 +1,3 @@
 *.skill
+__pycache__/
+docs/reviews/
