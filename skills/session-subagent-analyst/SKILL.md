@@ -13,6 +13,8 @@ Read from your prompt:
 - **File path**: path to the condensed JSON file
 - **Output directory**: where to write LEARNINGS.md and ERRORS.md
 
+**Read the entire file in one call** — use `limit: 10000` to avoid chunked reads that waste tokens on context accumulation.
+
 Extract from the condensed JSON `metadata` field:
 - **Session ID**: `metadata.session_id`
 - **Project name**: last component of `metadata.project_path` (e.g., `wolfhead_skills`)
