@@ -43,7 +43,7 @@ export function loadConfig(homeDir?: string): SivConfig {
     promotionsPath: path.join(sivDir, "promotions.jsonl"),
     backupsDir: path.join(sivDir, "backups"),
     promotionThreshold: {
-      minSessions: 3,
+      minSessions: 2,
       minOccurrences: 3,
       crossProjectMinProjects: 2,
     },

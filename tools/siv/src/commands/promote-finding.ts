@@ -10,7 +10,7 @@ import path from "path";
 import os from "os";
 import { loadConfig } from "../config.js";
 import { callLLM } from "../llm.js";
-import { appendJsonl, updateFindingStatus } from "../storage.js";
+import { appendJsonl, updateFindingStatus, readFileOrEmpty } from "../storage.js";
 import {
   projectPathToMemoryPath,
   globalMemoryPath,
@@ -96,17 +96,6 @@ export function applyPromotion(
 
   fs.mkdirSync(path.dirname(targetFile), { recursive: true });
   fs.writeFileSync(targetFile, content, "utf-8");
-}
-
-/**
- * Read a file's contents or return empty string if missing.
- */
-function readFileOrEmpty(filePath: string): string {
-  try {
-    return fs.readFileSync(filePath, "utf-8");
-  } catch {
-    return "";
-  }
 }
 
 /**

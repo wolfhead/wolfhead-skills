@@ -145,28 +145,8 @@ export function searchSessions(options: SearchOptions = {}): SessionInfo[] {
       }
     }
 
-    // Also check for jsonl files in subdirectories (but not subagents)
-    if (fs.existsSync(dir)) {
-      const walkDir = (d: string) => {
-        const items = fs.readdirSync(d);
-        for (const item of items) {
-          const fullPath = path.join(d, item);
-          const s = fs.statSync(fullPath);
-          if (s.isDirectory()) {
-            if (item === "subagents") continue;
-            walkDir(fullPath);
-          } else if (item.endsWith(".jsonl")) {
-            if (!fullPath.split(path.sep).includes("subagents")) {
-              // Avoid duplicates from the top-level scan
-              if (d !== dir) {
-                candidates.push({ filePath: fullPath, stat: s });
-              }
-            }
-          }
-        }
-      };
-      walkDir(dir);
-    }
+    // Match Python behavior: flat scan only (no recursive walk)
+    // Session JSONL files live directly in the project directory
   }
 
   // Filter by date

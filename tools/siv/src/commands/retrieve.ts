@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { pathToProjectKey } from "../sessions/search.js";
+import { readFileOrEmpty } from "../storage.js";
 
 export interface RetrieveOptions {
   projectPath?: string;
@@ -36,17 +37,6 @@ export function projectPathToMemoryPath(
 export function globalMemoryPath(homeDir?: string): string {
   const home = homeDir ?? os.homedir();
   return path.join(home, ".claude", "MEMORY.md");
-}
-
-/**
- * Read a file and return its contents, or empty string if it doesn't exist.
- */
-function readFileOrEmpty(filePath: string): string {
-  try {
-    return fs.readFileSync(filePath, "utf-8");
-  } catch {
-    return "";
-  }
 }
 
 /**

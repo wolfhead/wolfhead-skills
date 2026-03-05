@@ -56,6 +56,17 @@ export function readJsonl<T>(filePath: string): T[] {
  * Update the status field of findings matching the given IDs.
  * Reads all lines, updates matching ones, rewrites the file.
  */
+/**
+ * Read a file's contents or return empty string if missing.
+ */
+export function readFileOrEmpty(filePath: string): string {
+  try {
+    return fs.readFileSync(filePath, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
 export function updateFindingStatus(
   filePath: string,
   findingIds: string[],
