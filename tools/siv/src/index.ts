@@ -71,4 +71,39 @@ program
     console.log(result);
   });
 
+program
+  .command("promote_finding")
+  .description("Promote a finding to memory")
+  .requiredOption("--finding-ids <ids>", "Comma-separated finding IDs")
+  .requiredOption("--scope <scope>", "project|global")
+  .option("--project <name>", "Project name")
+  .option("--project-path <path>", "Project path")
+  .requiredOption("--category <category>", "learning|error|preference")
+  .requiredOption("--rule <rule>", "The distilled rule text")
+  .action(async (options) => {
+    const { executePromoteFinding } = await import("./commands/promote-finding.js");
+    const result = await executePromoteFinding({
+      findingIds: options.findingIds.split(",").map((s: string) => s.trim()),
+      scope: options.scope,
+      project: options.project,
+      projectPath: options.projectPath,
+      category: options.category,
+      rule: options.rule,
+    });
+    console.log(JSON.stringify(result, null, 2));
+  });
+
+program
+  .command("run_promotion")
+  .description("Scan findings and promote patterns to memory")
+  .option("--dry-run", "Show what would be promoted without doing it")
+  .option("--window <days>", "Days to look back", "3")
+  .action(async (options) => {
+    const { executeRunPromotion } = await import("./commands/run-promotion.js");
+    await executeRunPromotion({
+      dryRun: options.dryRun || false,
+      window: parseInt(options.window),
+    });
+  });
+
 program.parse();
