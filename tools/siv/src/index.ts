@@ -38,4 +38,37 @@ program
     console.log(JSON.stringify(result, null, 2));
   });
 
+program
+  .command("analyze")
+  .description("Analyze session transcripts for learnings")
+  .option("--latest <n>", "Number of recent sessions", "5")
+  .option("--project-path <path>", "Filter by project path")
+  .option("--since <date>", "Sessions since date (YYYY-MM-DD)")
+  .option("--session <id>", "Analyze specific session")
+  .action(async (options) => {
+    const { executeAnalyze } = await import("./commands/analyze.js");
+    await executeAnalyze({
+      latest: parseInt(options.latest),
+      projectPath: options.projectPath,
+      since: options.since,
+      session: options.session,
+    });
+  });
+
+program
+  .command("retrieve")
+  .description("Get promoted learnings for context injection")
+  .option("--project-path <path>", "Project path")
+  .option("--global", "Include global learnings")
+  .option("--format <format>", "Output format (text|json)", "text")
+  .action(async (options) => {
+    const { executeRetrieve } = await import("./commands/retrieve.js");
+    const result = executeRetrieve({
+      projectPath: options.projectPath,
+      global: options.global || false,
+      format: options.format,
+    });
+    console.log(result);
+  });
+
 program.parse();
