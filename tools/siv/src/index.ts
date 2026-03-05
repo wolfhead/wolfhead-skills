@@ -94,6 +94,18 @@ program
   });
 
 program
+  .command("status")
+  .description("Show finding and promotion statistics")
+  .option("--project-path <path>", "Filter by project path")
+  .action(async (options) => {
+    const { executeStatus } = await import("./commands/status.js");
+    const output = executeStatus({
+      projectPath: options.projectPath,
+    });
+    console.log(output);
+  });
+
+program
   .command("run_promotion")
   .description("Scan findings and promote patterns to memory")
   .option("--dry-run", "Show what would be promoted without doing it")
