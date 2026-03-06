@@ -294,7 +294,167 @@ Analogy: A narrow bridge with cliffs needs specific guardrails (low freedom), wh
 
 ---
 
-## 5. Bundled Resources
+## 5. Constraint Enforcement Patterns
+
+Claude will ignore constraints that are buried deep in a long document, stated once without reinforcement, phrased as soft suggestions, or not backed by examples. These patterns ensure constraints actually stick.
+
+### Constraints First, Workflow Second
+
+Put the most important rules at the **top of the skill**, immediately after frontmatter. The model processes early content with more attention than content at line 80+.
+
+```
+---
+name: ...
+description: ...
+---
+
+<HARD-GATE>
+[Critical constraints here — what is ALLOWED and what is FORBIDDEN]
+</HARD-GATE>
+
+[Everything else follows]
+```
+
+**Before (broken):** 76 lines of workflow → constraints at line 77 → model ignores them.
+**After (working):** Constraints at line 7 → workflow at line 60 → model follows them.
+
+### Use HARD-GATE Blocks
+
+Wrap non-negotiable rules in `<HARD-GATE>` tags. This convention signals to the model these are absolute boundaries, not suggestions.
+
+Inside a HARD-GATE:
+- Use "FORBIDDEN" for things the model must never do
+- Use "ONLY" / "MUST" for things the model must always do
+- List specific violations by name (don't rely on "etc.")
+
+```markdown
+<HARD-GATE>
+ONLY two categories exist: [Bug] and [Security].
+
+FORBIDDEN — do NOT use any other label including:
+[Quality], [Nit], [Question], [Suggestion], [Style], [Performance]
+</HARD-GATE>
+```
+
+### Pre-Action Self-Verification Checklists
+
+Before the model takes an irreversible action (posting a comment, creating a file, making an API call), force it to self-check against the rules. This works because the model evaluates each item at the decision point, not 50 lines earlier when it was still loading context.
+
+```markdown
+## Pre-Post Checklist
+
+Before EVERY call to post_inline_comment, verify ALL of these.
+If ANY answer is "no", discard the comment:
+
+1. Is the category exactly [Bug] or [Security]?
+2. Did I trace the actual code path to confirm this issue?
+3. Can I state the problem as a fact, not a question?
+```
+
+### Tool-Level Filtering
+
+Don't rely solely on skill instructions — filter bad inputs at the tool level when possible.
+
+If the agent shouldn't see certain data (e.g., non-code files during review), create a filtered version of the tool that strips it before the model ever sees it:
+
+```typescript
+const CODE_REVIEW_IGNORE_EXTENSIONS = [".md", ".json", ".yaml", ...];
+
+const isCodeFile = (path: string) =>
+  !CODE_REVIEW_IGNORE_EXTENSIONS.some((ext) => path.endsWith(ext));
+
+// Filtered variant — agent never sees non-code files
+const getMergeRequestDiffFiltered = loggedTool(
+  "get_merge_request_diff_filtered",
+  "Get MR diff filtered for code review — excludes non-code files",
+  schema,
+  async (args) => {
+    const diffs = await client.getMergeRequestDiffs(...);
+    return diffs.filter((d) => isCodeFile(d.new_path || d.old_path));
+  },
+);
+```
+
+Keep the unfiltered original available for other use cases.
+
+### Lock Down Output Formats
+
+If the model should produce a specific format, provide the **exact template** and an explicit FORBIDDEN list for additions. Without the FORBIDDEN list, the model will add "helpful" sections it wasn't asked for.
+
+```markdown
+Post exactly this format. Nothing else.
+
+‍```
+## Review Complete
+| Metric | Value |
+|--------|-------|
+| Files reviewed | <count> |
+‍```
+
+FORBIDDEN in sign-off:
+- "Positive Aspects", "Recommendations", "Summary" sections
+- Praise or commentary on code quality
+- Any text outside the table and issue summary
+```
+
+### Explain WHY Constraints Exist
+
+The model follows rules more reliably when it understands the motivation. One sentence of context is enough — don't overdo it.
+
+```markdown
+Every comment you post costs team productivity. The fixer agent will spend
+time addressing it, a new review cycle triggers, and the MR ships later.
+```
+
+### Constraint Enforcement Template
+
+```markdown
+---
+name: <skill-name>
+description: <what it does + when to use it>
+---
+
+# <Skill Title>
+
+<HARD-GATE>
+[Allowed actions/categories]
+[FORBIDDEN actions/categories — listed explicitly]
+[Requirements for each allowed action]
+</HARD-GATE>
+
+## Pre-Action Checklist
+[Self-verification before irreversible actions]
+
+## Examples
+### CORRECT — do these:
+[2+ full examples]
+### INCORRECT — do NOT do these:
+[2+ real violations with rejection reasons]
+
+## Workflow
+[Phases/steps — reference filtered tools and checklists]
+
+## Output Format
+[Exact templates + FORBIDDEN additions]
+
+## Rules
+[Remaining operational rules]
+```
+
+### Checklist for Revising Constraint-Heavy Skills
+
+- [ ] Are constraints in the first 20 lines (after frontmatter)?
+- [ ] Is there a `<HARD-GATE>` block with FORBIDDEN list?
+- [ ] Is there a self-verification checklist before irreversible actions?
+- [ ] Are there canonical examples (correct + incorrect)?
+- [ ] Are output formats locked with FORBIDDEN additions list?
+- [ ] Is the skill under 150 lines? If not, extract to `references/`
+- [ ] Can any inputs be filtered at the tool level?
+- [ ] Are constraints stated as facts ("FORBIDDEN"), not suggestions ("consider avoiding")?
+
+---
+
+## 6. Bundled Resources
 
 ### Scripts (`scripts/`)
 
@@ -364,7 +524,7 @@ Files not loaded into context, but used within the output Claude produces.
 
 ---
 
-## 6. Workflow Patterns
+## 7. Workflow Patterns
 
 ### Sequential Workflows
 
@@ -445,7 +605,7 @@ For complex, open-ended tasks, use the "plan-validate-execute" pattern:
 
 ---
 
-## 7. Output Patterns
+## 8. Output Patterns
 
 ### Template Pattern
 
@@ -525,7 +685,7 @@ Examples help Claude understand the desired style and level of detail more clear
 
 ---
 
-## 8. Claude Search Optimization (CSO)
+## 9. Claude Search Optimization (CSO)
 
 ### Rich Description Field
 
@@ -551,7 +711,7 @@ Use skill name only, with explicit requirement markers:
 
 ---
 
-## 9. Quality Standards and Anti-Patterns
+## 10. Quality Standards and Anti-Patterns
 
 ### Anti-Patterns to Avoid
 
@@ -613,7 +773,7 @@ Use skill name only, with explicit requirement markers:
 
 ---
 
-## 10. Testing and Validation
+## 11. Testing and Validation
 
 ### Evaluation-Driven Development
 
@@ -686,7 +846,7 @@ Good pressure scenarios combine 3+ pressures:
 
 ---
 
-## 11. Bulletproofing Discipline-Enforcing Skills
+## 12. Bulletproofing Discipline-Enforcing Skills
 
 ### Close Every Loophole Explicitly
 
@@ -744,7 +904,7 @@ Make it easy for agents to self-check:
 
 ---
 
-## 12. Persuasion Principles for Skill Design
+## 13. Persuasion Principles for Skill Design
 
 LLMs respond to the same persuasion principles as humans (Meincke et al., 2025: N=28,000 conversations, compliance 33% -> 72%).
 
@@ -777,7 +937,7 @@ LLMs respond to the same persuasion principles as humans (Meincke et al., 2025: 
 
 ---
 
-## 13. Skill Creation Process
+## 14. Skill Creation Process
 
 ### Step-by-Step Workflow
 
@@ -805,7 +965,7 @@ Pay attention to how Claude actually uses skills in practice:
 
 ---
 
-## 14. Validation Rules (from quick_validate.py)
+## 15. Validation Rules (from quick_validate.py)
 
 The validation script enforces these rules:
 
@@ -818,7 +978,7 @@ The validation script enforces these rules:
 
 ---
 
-## 15. File Organization Patterns
+## 16. File Organization Patterns
 
 ### Self-Contained Skill
 ```
@@ -882,3 +1042,6 @@ This document was compiled from:
 - `/Users/meixueting/.claude/plugins/cache/claude-plugins-official/superpowers/4.3.1/skills/writing-skills/anthropic-best-practices.md` - Anthropic official best practices
 - `/Users/meixueting/.claude/plugins/cache/claude-plugins-official/superpowers/4.3.1/skills/writing-skills/persuasion-principles.md` - Persuasion principles for skill design
 - `/Users/meixueting/.claude/plugins/cache/claude-plugins-official/superpowers/4.3.1/skills/writing-skills/testing-skills-with-subagents.md` - Testing methodology
+- `docs/skill-authoring-guide.md` (now merged) - Constraint enforcement lessons from building skills for Claude Sonnet 4.5
+- [Anthropic Prompting Best Practices](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices)
+- [Anthropic Context Engineering for Agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
