@@ -1,85 +1,181 @@
 ---
 name: openclaw-config-guard
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: >
+  Safe openclaw configuration changes with validation, backup, and controlled restart.
+  Use when modifying ~/.openclaw/openclaw.json or ~/.openclaw/.env — adding models,
+  providers, channels, plugins, agents, bindings, or any gateway config change.
+  Triggers: "add model", "change config", "update openclaw config", "add provider",
+  "configure feishu", "add channel", "change gateway settings", "edit openclaw.json".
+  Also use on remote machines when editing openclaw config via SSH.
 ---
 
-# Openclaw Config Guard
+# OpenClaw Config Guard
 
-## Overview
+Safe, validated openclaw configuration changes. Every config edit follows this checklist.
 
-[TODO: 1-2 sentences explaining what this skill enables]
+## Mandatory Checklist
 
-## Structuring This Skill
+Follow every step in order. Do not skip steps.
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+### 1. Read current config
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" → "Reading" → "Creating" → "Editing"
-- Structure: ## Overview → ## Workflow Decision Tree → ## Step 1 → ## Step 2...
+```bash
+cat ~/.openclaw/openclaw.json
+```
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" → "Merge PDFs" → "Split PDFs" → "Extract Text"
-- Structure: ## Overview → ## Quick Start → ## Task Category 1 → ## Task Category 2...
+For remote machines: `ssh <user>@<host> "cat ~/.openclaw/openclaw.json"`
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" → "Colors" → "Typography" → "Features"
-- Structure: ## Overview → ## Guidelines → ## Specifications → ## Usage...
+### 2. Backup current config
 
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" → numbered capability list
-- Structure: ## Overview → ## Core Capabilities → ### 1. Feature → ### 2. Feature...
+Create timestamped backup before any modification:
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+```bash
+cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.bak.$(date +%Y%m%d-%H%M%S)
+```
 
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
+### 3. Propose changes — show diff to user
 
-## [TODO: Replace with the first main section based on chosen structure]
+- Describe what will change in plain language
+- Show the exact JSON diff (old vs new) to the user
+- **Wait for user approval before writing**
 
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
+Example:
 
-## Resources
+```
+Proposed changes to ~/.openclaw/openclaw.json:
+- Adding provider "ppio" with 2 models (deepseek-v3.2, qwen3.5)
+- Adding PPIO_API_KEY reference
 
-This skill includes example resource directories that demonstrate how to organize different types of bundled resources:
+[show JSON diff]
 
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
+Proceed? (waiting for approval)
+```
 
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
+### 4. Validate before writing
 
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
+After user approves the content, validate before writing to disk:
 
-**Note:** Scripts may be executed without loading into context, but can still be read by Claude for patching or environment adjustments.
+**JSON syntax check:**
 
-### references/
-Documentation and reference material intended to be loaded into context to inform Claude's process and thinking.
+```bash
+python3 -c "import json; json.load(open('/dev/stdin'))" <<< '<proposed_json>'
+```
 
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
+**Env var check** — run the bundled validator:
 
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Claude should reference while working.
+```bash
+python3 <skill_dir>/scripts/validate_config.py <config_path> <env_path>
+```
 
-### assets/
-Files not intended to be loaded into context, but rather used within the output Claude produces.
+Exit codes: 0 = ok, 1 = bad JSON, 2 = missing env vars.
 
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
+If env vars are missing, ask user to provide values and add them to `~/.openclaw/.env` before proceeding.
 
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
+**Model input types** — only `"text"` and `"image"` are valid. Reject `"video"`, `"audio"`, etc.
 
----
+### 5. Write config
 
-**Any unneeded directories can be deleted.** Not every skill requires all three types of resources.
+Write the validated JSON to disk.
+
+### 6. Run openclaw doctor
+
+```bash
+openclaw doctor 2>&1
+```
+
+Or if `openclaw` is not in PATH:
+
+```bash
+PATH=/usr/local/opt/node@22/bin:$PATH openclaw doctor 2>&1
+```
+
+If doctor reports errors, fix them before proceeding. Do not restart with a broken config.
+
+### 7. Announce restart — get approval
+
+Tell the user:
+- What changed (summary)
+- Doctor result
+- Ask for explicit restart approval
+
+Example:
+
+```
+Config validated. Changes:
+- Added ppio provider with deepseek-v3.2 and qwen3.5 models
+- Doctor: ✅ no errors
+
+Ready to restart gateway. Approve?
+```
+
+### 8. Restart gateway
+
+```bash
+# Kill existing processes (check for duplicates)
+pkill -f 'openclaw.*gateway'
+sleep 2
+
+# Verify no stale processes remain
+ps aux | grep 'openclaw.*gateway' | grep -v grep
+
+# Start gateway
+PATH=/usr/local/opt/node@22/bin:$PATH nohup openclaw gateway --port 18789 > /dev/null 2>&1 &
+sleep 4
+```
+
+### 9. Verify and announce success
+
+```bash
+# Health check
+curl -s -o /dev/null -w '%{http_code}' http://localhost:18789/
+
+# Check for errors in the first seconds
+tail -5 ~/.openclaw/logs/gateway.err.log
+
+# Check model loaded
+tail -10 ~/.openclaw/logs/gateway.log | grep -i 'model\|error\|listening'
+```
+
+Report to user:
+- HTTP status (should be 200)
+- Any errors from logs
+- Confirm model and listening address
+
+If health check fails, show error logs and offer to rollback from backup.
+
+## Common Pitfalls
+
+- **Duplicate gateway processes**: Always `pkill` before starting a new one
+- **`"video"` input type**: Not supported, only `"text"` and `"image"`
+- **Missing `gateway.mode`**: Must be set to `"local"` for local deployments
+- **Missing `defaultAccount`**: Required when channel accounts are configured
+- **Env var not in .env**: Config writes `${VAR}` but .env lacks the key — gateway starts but API calls fail silently
+
+## Rollback
+
+If anything goes wrong after restart:
+
+```bash
+# Find most recent backup
+ls -t ~/.openclaw/openclaw.json.bak.* | head -1
+
+# Restore
+cp <backup_file> ~/.openclaw/openclaw.json
+
+# Restart
+pkill -f 'openclaw.*gateway'
+sleep 2
+PATH=/usr/local/opt/node@22/bin:$PATH nohup openclaw gateway --port 18789 > /dev/null 2>&1 &
+```
+
+## Scripts
+
+### scripts/validate_config.py
+
+Run to validate JSON syntax and check env var references:
+
+```bash
+python3 <skill_dir>/scripts/validate_config.py [config_path] [env_path]
+```
+
+Defaults to `~/.openclaw/openclaw.json` and `~/.openclaw/.env`.
