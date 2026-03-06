@@ -1,71 +1,99 @@
 /**
- * Build the promotion prompt for LLM-based memory writing.
+ * Build the promotion prompt for LLM-based dedup/merge decisions.
  *
- * The LLM decides how to integrate a distilled rule into the
- * appropriate MEMORY.md or CLAUDE.md file.
+ * The LLM decides whether to create a new promotion, merge with an
+ * existing one, supersede an existing one, or skip as duplicate.
  */
+
+export interface ExistingPromotion {
+  id: string;
+  rule: string;
+  category: string;
+  finding_ids: string[];
+  ts: string;
+}
 
 export interface PromoteWriterInput {
   rule: string;
-  category: string; // learning | error | preference
+  category: string;
   scope: "project" | "global";
-  currentMemoryMd: string;
-  currentClaudeMd: string;
+  existingPromotions: ExistingPromotion[];
   findingIds: string[];
 }
 
 export interface PromoteWriterOutput {
   action: "create" | "merge" | "supersede" | "skip";
-  section: string; // e.g. "## Session Learnings"
-  target_line?: string; // existing line to replace (for merge/supersede)
-  entry: string; // the formatted entry line
+  entry: string; // the rule text for the new/merged promotion
   reason: string;
+  supersedes_ids?: string[]; // promotion IDs to mark as superseded (for merge/supersede)
 }
 
 export function buildPromotePrompt(input: PromoteWriterInput): {
   system: string;
   user: string;
 } {
-  const today = new Date().toISOString().slice(0, 10);
-
-  const system = `You are a memory manager for an AI coding agent. Your job is to decide how to integrate a new rule into the agent's MEMORY.md file.
+  const system = `You are a deduplication engine for promoted rules. Your job is to decide how a new rule relates to existing promoted rules.
 
 ## Decision logic
 
-1. If the rule (or a semantically equivalent rule) already exists in CLAUDE.md → action: "skip"
-2. If a similar rule exists in MEMORY.md → action: "merge" (update confirmed date, append session IDs)
-3. If a conflicting rule exists in MEMORY.md → action: "supersede" (replace with new rule)
-4. If the rule is new → action: "create"
+1. If the rule is semantically equivalent to an existing promotion → action: "skip"
+2. If the rule overlaps with one or more existing promotions (same topic, complementary info) → action: "merge" (combine into one rule, return supersedes_ids of the old promotions)
+3. If the rule conflicts with an existing promotion → action: "supersede" (replace old, return supersedes_ids)
+4. If the rule is genuinely new → action: "create"
 
-## Entry formats
+## Constraints
 
-For learnings and preferences:
-- <rule text> *(added: YYYY-MM-DD, confirmed: YYYY-MM-DD, sessions: id1, id2)*
+- When merging rules, preserve the NARROWEST correct scope from the inputs. Do not broaden a rule beyond what the source findings support.
+- The merged "entry" must be a standalone rule — not a summary of what changed.
 
-For errors:
-- **<error pattern>**: <how to avoid> *(added: YYYY-MM-DD, confirmed: YYYY-MM-DD, sessions: id1, id2)*
+<example>
+<input>
+New rule: "Read existing files before Edit to verify file state"
+Category: error
+Scope: project
 
-## Section mapping
+Existing promotions:
+- [PRM-001] (learning) When modifying a file, verify its current content first to avoid blind overwrites
+</input>
 
-- learning → "## Session Learnings"
-- error → "## Session Errors"
-- preference → "## Preferences"
+<correct-output>
+{
+  "action": "merge",
+  "entry": "Read existing files before Edit or Write to verify current content and avoid blind overwrites. For new files, Write directly.",
+  "reason": "Both rules recommend verifying file state before modification — merged preserving narrow scope",
+  "supersedes_ids": ["PRM-001"]
+}
+</correct-output>
 
-## Merge rules
-
-When merging, preserve the original "added" date but update "confirmed" to today (${today}).
-Append any new session IDs to the existing sessions list (comma-separated).
+<incorrect-output reason="Over-generalized — broadened to 'all file operations' and 'even for new files' which neither source rule supports">
+{
+  "action": "merge",
+  "entry": "Always read any file before performing any file operation, even for new files or when you believe you know the content.",
+  "reason": "Merged overlapping rules about file operations",
+  "supersedes_ids": ["PRM-001"]
+}
+</incorrect-output>
+</example>
 
 ## Output format
 
 Return ONLY valid JSON with this exact structure:
 {
   "action": "create" | "merge" | "supersede" | "skip",
-  "section": "## Section Name",
-  "target_line": "the exact existing line to replace (only for merge/supersede, omit for create/skip)",
-  "entry": "the formatted entry line (omit for skip)",
-  "reason": "brief explanation of why this action was chosen"
+  "entry": "the rule text (omit for skip)",
+  "reason": "brief explanation of why this action was chosen",
+  "supersedes_ids": ["PRM-xxx", "PRM-yyy"]  // only for merge/supersede — IDs of old promotions to replace
 }`;
+
+  const existingText =
+    input.existingPromotions.length === 0
+      ? "(none)"
+      : input.existingPromotions
+          .map(
+            (p) =>
+              `- [${p.id}] (${p.category}) ${p.rule}`
+          )
+          .join("\n");
 
   const user = `## Rule to promote
 
@@ -73,15 +101,10 @@ Category: ${input.category}
 Scope: ${input.scope}
 Rule: ${input.rule}
 Finding IDs: ${input.findingIds.join(", ")}
-Today: ${today}
 
-## Current MEMORY.md contents
+## Existing active promotions (same project/scope)
 
-${input.currentMemoryMd || "(empty)"}
-
-## Current CLAUDE.md contents
-
-${input.currentClaudeMd || "(empty)"}`;
+${existingText}`;
 
   return { system, user };
 }

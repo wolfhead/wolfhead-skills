@@ -1,45 +1,108 @@
 /**
- * Run promotion: scan pending findings, group them, distill into rules,
- * and promote to memory files.
+ * Run promotion: group findings semantically, distill into rules,
+ * and promote to promotions.jsonl.
  */
 
 import fs from "fs";
-import { loadConfig, type SivConfig } from "../config.js";
-import { readJsonl } from "../storage.js";
-import { callLLM } from "../llm.js";
+import readline from "readline";
+import { loadConfig } from "../config.js";
+import { readJsonl, updateFindingStatus } from "../storage.js";
+import { callLLM, getPromoteConfig } from "../llm.js";
 import {
   buildDistillPrompt,
   type FindingGroup,
   type DistillOutput,
 } from "../prompts/distill.js";
 import { executePromoteFinding } from "./promote-finding.js";
+import { executeGroup } from "./group.js";
+import { scoreFinding } from "../scoring.js";
 import type { Finding } from "../types.js";
 
 export interface RunPromotionOptions {
   dryRun?: boolean;
+  reset?: boolean;
+  yes?: boolean;
   window?: number; // days to look back, default 3
 }
 
 /**
- * Group findings by (project, category).
- *
- * Each group gets a sequential group_id starting at 1.
- * Scope is always "project" (per-project grouping).
+ * Prompt user for confirmation via stdin.
  */
-export function groupFindings(findings: Finding[]): FindingGroup[] {
+function confirm(message: string): Promise<boolean> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(`${message} [y/N] `, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === "y");
+    });
+  });
+}
+
+/**
+ * Reset all findings to pending and clear promotions.jsonl.
+ */
+export async function resetPromotions(
+  skipConfirm?: boolean,
+  homeDir?: string
+): Promise<boolean> {
+  const config = loadConfig(homeDir);
+
+  const allFindings = readJsonl<Finding>(config.findingsPath);
+  const promotedIds = allFindings
+    .filter((f) => f.status === "promoted")
+    .map((f) => f.id);
+
+  const promotionCount = fs.existsSync(config.promotionsPath)
+    ? readJsonl(config.promotionsPath).length
+    : 0;
+
+  console.log(`This will:`);
+  console.log(`  - Reset ${promotedIds.length} findings from "promoted" → "pending"`);
+  console.log(`  - Delete ${promotionCount} promotions from promotions.jsonl`);
+
+  if (!skipConfirm) {
+    const ok = await confirm("Continue?");
+    if (!ok) {
+      console.log("Aborted.");
+      return false;
+    }
+  }
+
+  if (promotedIds.length > 0) {
+    updateFindingStatus(config.findingsPath, promotedIds, "pending");
+  }
+
+  if (fs.existsSync(config.promotionsPath)) {
+    fs.unlinkSync(config.promotionsPath);
+  }
+
+  console.log("Reset complete.");
+  return true;
+}
+
+/**
+ * Build FindingGroups from the semantic `group` field on findings.
+ *
+ * Only includes groups with 2+ pending findings within the time window.
+ */
+export function buildGroupsFromFindings(
+  findings: Finding[],
+  minSize: number = 2
+): FindingGroup[] {
   const map = new Map<string, Finding[]>();
 
   for (const f of findings) {
-    const key = `${f.project}::${f.category}`;
-    const arr = map.get(key) ?? [];
+    if (!f.group) continue;
+    const arr = map.get(f.group) ?? [];
     arr.push(f);
-    map.set(key, arr);
+    map.set(f.group, arr);
   }
 
   const groups: FindingGroup[] = [];
   let groupId = 1;
 
   for (const [, items] of map) {
+    if (items.length < minSize) continue;
     const first = items[0];
     groups.push({
       group_id: groupId++,
@@ -60,48 +123,32 @@ export function groupFindings(findings: Finding[]): FindingGroup[] {
 }
 
 /**
- * Filter groups that meet promotion thresholds.
- *
- * A group qualifies if:
- * - It has findings from >= minSessions unique sessions, OR
- * - It has >= minOccurrences total findings
- */
-export function applyThresholds(
-  groups: FindingGroup[],
-  thresholds: SivConfig["promotionThreshold"]
-): FindingGroup[] {
-  return groups.filter((g) => {
-    const uniqueSessions = new Set(g.findings.map((f) => f.session)).size;
-    const totalFindings = g.findings.length;
-
-    return (
-      uniqueSessions >= thresholds.minSessions ||
-      totalFindings >= thresholds.minOccurrences
-    );
-  });
-}
-
-/**
  * Execute the run_promotion command.
  *
  * Flow:
- * 1. Read findings.jsonl, filter pending within time window
- * 2. Group by (project, category)
- * 3. Apply thresholds
- * 4. If no candidates, print message and return
- * 5. If dry run, print candidates and return
- * 6. Call LLM with distill prompt
- * 7. For each promotion, call executePromoteFinding
+ * 1. Reset if requested
+ * 2. Read findings, filter pending within window
+ * 3. Run semantic grouping if any findings lack a group field
+ * 4. Build groups from the `group` field, filter to 2+ findings
+ * 5. Dry run: print candidates and return
+ * 6. Distill each group into a rule via LLM
+ * 7. Promote each distilled rule via executePromoteFinding
  * 8. Print summary
  */
 export async function executeRunPromotion(
   options: RunPromotionOptions = {},
   homeDir?: string
 ): Promise<void> {
+  // 1. Reset if requested
+  if (options.reset) {
+    const ok = await resetPromotions(options.yes, homeDir);
+    if (!ok) return;
+  }
+
   const config = loadConfig(homeDir);
   const windowDays = options.window ?? 3;
 
-  // 1. Read and filter findings
+  // 2. Read and filter findings
   const allFindings = readJsonl<Finding>(config.findingsPath);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - windowDays);
@@ -116,60 +163,119 @@ export async function executeRunPromotion(
     return;
   }
 
-  // 2. Group
-  const groups = groupFindings(pending);
+  // 3. Run semantic grouping if any pending findings lack a group field
+  const ungrouped = pending.filter((f) => !f.group);
+  if (ungrouped.length > 0) {
+    console.log(`Grouping ${ungrouped.length} ungrouped findings...`);
+    await executeGroup({ yes: true }, homeDir);
+    // Re-read findings after grouping updated the file
+    const refreshed = readJsonl<Finding>(config.findingsPath);
+    // Update pending array with fresh group values
+    for (const p of pending) {
+      const fresh = refreshed.find((f) => f.id === p.id);
+      if (fresh) {
+        p.group = fresh.group;
+      }
+    }
+  }
 
-  // 3. Apply thresholds
-  const candidates = applyThresholds(groups, config.promotionThreshold);
+  // 4. Build candidates from two paths:
+  //    Path A: semantic groups with 2+ findings
+  //    Path B: high-score singletons (score >= threshold)
+  const groupCandidates = buildGroupsFromFindings(pending);
+
+  // Collect IDs already in group candidates
+  const groupedIds = new Set<string>();
+  for (const g of groupCandidates) {
+    for (const f of g.findings) {
+      groupedIds.add(f.id);
+    }
+  }
+
+  // Path B: high-score singletons
+  let nextGroupId = groupCandidates.length + 1;
+  const scoreCandidates: FindingGroup[] = [];
+  for (const f of pending) {
+    if (groupedIds.has(f.id)) continue;
+    const score = scoreFinding(f.category, f.priority);
+    if (score >= config.promotionScoreThreshold) {
+      scoreCandidates.push({
+        group_id: nextGroupId++,
+        project: f.project,
+        project_path: f.project_path,
+        scope: "project",
+        category: f.category,
+        findings: [{
+          id: f.id,
+          summary: f.summary,
+          details: f.details,
+          session: f.session,
+        }],
+      });
+    }
+  }
+
+  const candidates = [...groupCandidates, ...scoreCandidates];
 
   if (candidates.length === 0) {
     console.log("Nothing to promote.");
     return;
   }
 
-  // 4/5. Dry run
+  // 5. Dry run
   if (options.dryRun) {
     console.log("Candidates for promotion:");
-    for (const g of candidates) {
-      const sessions = new Set(g.findings.map((f) => f.session)).size;
-      console.log(
-        `  [${g.category}] ${g.project}: ${g.findings.length} findings from ${sessions} sessions`
-      );
+    for (const g of groupCandidates) {
+      const groupKey = pending.find((f) => f.id === g.findings[0].id)?.group ?? "?";
+      console.log(`  [group: ${groupKey}] ${g.findings.length} findings`);
       for (const f of g.findings) {
         console.log(`    - ${f.id}: ${f.summary}`);
       }
     }
+    for (const g of scoreCandidates) {
+      const f = g.findings[0];
+      const finding = pending.find((p) => p.id === f.id)!;
+      const score = scoreFinding(finding.category, finding.priority);
+      console.log(`  [score: ${score}] ${f.id} (${finding.category}/${finding.priority})`);
+      console.log(`    ${f.summary}`);
+    }
     return;
   }
 
-  // 6. Call LLM to distill
+  // 6. Distill each group into a rule (using promote model if configured)
+  const promoteConfig = getPromoteConfig(config);
   const { system, user } = buildDistillPrompt(candidates);
   const { result: distilled } = await callLLM<DistillOutput>(
-    config,
+    promoteConfig,
     system,
     user
   );
 
-  // 7. Promote each
+  // 7. Promote each distilled rule (in parallel)
+  const promoteResults = await Promise.all(
+    distilled.promotions.map((p) =>
+      executePromoteFinding(
+        {
+          findingIds: p.finding_ids,
+          scope: p.scope,
+          project: p.project,
+          projectPath: p.project_path,
+          category: p.category,
+          rule: p.rule,
+        },
+        homeDir,
+        promoteConfig
+      ).then((result) => ({ result, promotion: p }))
+    )
+  );
+
   let promotedCount = 0;
-  for (const p of distilled.promotions) {
-    const result = await executePromoteFinding(
-      {
-        findingIds: p.finding_ids,
-        scope: p.scope,
-        project: p.project,
-        projectPath: p.project_path,
-        category: p.category,
-        rule: p.rule,
-      },
-      homeDir
-    );
+  for (const { result, promotion: p } of promoteResults) {
     if (result.action !== "skip") {
       promotedCount++;
     }
-    console.log(
-      `  [${result.action}] ${p.category} → ${p.rule.slice(0, 60)}${p.rule.length > 60 ? "..." : ""}`
-    );
+    const rulePreview = p.rule.slice(0, 60) + (p.rule.length > 60 ? "..." : "");
+    console.log(`  [${result.action}] ${p.category} → ${rulePreview}`);
   }
 
   // 8. Summary

@@ -67,6 +67,84 @@ export function readFileOrEmpty(filePath: string): string {
   }
 }
 
+/**
+ * Generate a promotion ID with format: PRM-YYYYMMDD-xxx
+ */
+export function generatePromotionId(): string {
+  const now = new Date();
+  const dateStr =
+    now.getFullYear().toString() +
+    (now.getMonth() + 1).toString().padStart(2, "0") +
+    now.getDate().toString().padStart(2, "0");
+  const hex = crypto.randomBytes(2).toString("hex").slice(0, 3);
+  return `PRM-${dateStr}-${hex}`;
+}
+
+/**
+ * Update the status field of promotions matching the given IDs.
+ * Reads all lines, updates matching ones, rewrites the file.
+ */
+export function updatePromotionStatus(
+  filePath: string,
+  promotionIds: string[],
+  newStatus: string
+): void {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+
+  const content = fs.readFileSync(filePath, "utf-8");
+  const lines = content.split("\n").filter((line) => line.trim() !== "");
+  const idSet = new Set(promotionIds);
+
+  const updatedLines = lines.map((line) => {
+    try {
+      const obj = JSON.parse(line) as Record<string, unknown>;
+      if (typeof obj.id === "string" && idSet.has(obj.id)) {
+        obj.status = newStatus;
+        return JSON.stringify(obj);
+      }
+      return line;
+    } catch {
+      return line;
+    }
+  });
+
+  fs.writeFileSync(filePath, updatedLines.join("\n") + "\n", "utf-8");
+}
+
+/**
+ * Update a field on findings matching the given IDs.
+ * Reads all lines, updates matching ones, rewrites the file.
+ */
+export function updateFindingField(
+  filePath: string,
+  updates: Map<string, string>,
+  field: string
+): void {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+
+  const content = fs.readFileSync(filePath, "utf-8");
+  const lines = content.split("\n").filter((line) => line.trim() !== "");
+
+  const updatedLines = lines.map((line) => {
+    try {
+      const obj = JSON.parse(line) as Record<string, unknown>;
+      if (typeof obj.id === "string" && updates.has(obj.id)) {
+        obj[field] = updates.get(obj.id);
+        return JSON.stringify(obj);
+      }
+      return line;
+    } catch {
+      return line;
+    }
+  });
+
+  fs.writeFileSync(filePath, updatedLines.join("\n") + "\n", "utf-8");
+}
+
 export function updateFindingStatus(
   filePath: string,
   findingIds: string[],

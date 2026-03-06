@@ -8,6 +8,7 @@ vi.mock("../../src/config.js", () => ({
     apiKey: "test-key",
     apiBase: "https://api.example.com/v1",
     model: "test-model",
+    scansPath: "/tmp/siv-test/scans.jsonl",
     findingsPath: "/tmp/siv-test/findings.jsonl",
     promotionsPath: "/tmp/siv-test/promotions.jsonl",
     backupsDir: "/tmp/siv-test/backups",
@@ -40,26 +41,38 @@ vi.mock("../../src/commands/log.js", () => ({
   executeLog: (...args: unknown[]) => mockExecuteLog(...args),
 }));
 
+const mockAppendJsonl = vi.fn();
+const mockReadJsonl = vi.fn().mockReturnValue([]);
+vi.mock("../../src/storage.js", () => ({
+  appendJsonl: (...args: unknown[]) => mockAppendJsonl(...args),
+  readJsonl: (...args: unknown[]) => mockReadJsonl(...args),
+}));
+
+// Mock fs.readFileSync for countLines — return 100 lines by default
+const originalFs = await import("fs");
+vi.spyOn(originalFs.default, "readFileSync").mockReturnValue(
+  Array(100).fill("{}").join("\n")
+);
+
 import { executeAnalyze } from "../../src/commands/analyze.js";
 
 describe("buildAnalyzePrompt", () => {
   it("returns system and user prompts", () => {
     const result = buildAnalyzePrompt('{"metadata":{}}');
 
-    expect(result.system).toContain("analyze");
+    expect(result.system).toContain("session analyst");
     expect(result.system).toContain("findings");
     expect(result.system).toContain("correction");
     expect(result.system).toContain("error");
     expect(result.system).toContain("knowledge_gap");
     expect(result.system).toContain("best_practice");
-    expect(result.system).toContain("feature_request");
   });
 
   it("includes condensed JSON in user prompt", () => {
     const json = '{"metadata":{"session_id":"abc123"}}';
     const result = buildAnalyzePrompt(json);
 
-    expect(result.user).toContain("Analyze this session transcript:");
+    expect(result.user).toContain("Analyze this session transcript");
     expect(result.user).toContain(json);
   });
 
@@ -76,7 +89,13 @@ describe("buildAnalyzePrompt", () => {
     const result = buildAnalyzePrompt("{}");
 
     expect(result.system).toContain("What NOT to report");
-    expect(result.system).toContain("Normal, successful tool usage");
+    expect(result.system).toContain("Anything that worked on the first try");
+  });
+
+  it("uses strong enforcement for high-frequency exclusions", () => {
+    const result = buildAnalyzePrompt("{}");
+
+    expect(result.system).toContain("NEVER report");
   });
 });
 

@@ -10,7 +10,7 @@ import path from "path";
 import os from "os";
 
 export const MAX_SESSIONS = 20;
-export const DEFAULT_LATEST = 5;
+export const DEFAULT_LATEST = 20;
 export const DEFAULT_MIN_TURNS = 3;
 
 export interface SearchOptions {
@@ -169,12 +169,9 @@ export function searchSessions(options: SearchOptions = {}): SessionInfo[] {
   filtered.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
 
   // Build results with turn count filter
-  const cap = Math.min(latest, MAX_SESSIONS);
   const results: SessionInfo[] = [];
 
   for (const c of filtered) {
-    if (results.length >= cap) break;
-
     const turns = countTurns(c.filePath);
     if (turns < minTurns) continue;
 
@@ -190,10 +187,13 @@ export function searchSessions(options: SearchOptions = {}): SessionInfo[] {
     });
   }
 
-  if (filtered.length > MAX_SESSIONS) {
+  // Apply cap after all filtering
+  const cap = Math.min(latest, MAX_SESSIONS);
+  if (results.length > cap) {
     process.stderr.write(
-      `Warning: ${filtered.length} sessions matched, returning ${results.length} most recent\n`
+      `Warning: ${results.length} sessions matched, returning ${cap} most recent\n`
     );
+    return results.slice(0, cap);
   }
 
   return results;

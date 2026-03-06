@@ -1,0 +1,2 @@
+#!/bin/bash
+curl -X POST 'https://api.ppio.com/openai/chat/completions' -H 'Content-Type: application/json' -H 'Authorization: Bearer sk_eSYj6ABccCDj2-qt9vCU1DrTWeItcOnb1gEej428BA4' -d '{"model":"zai-org/glm-5","messages":[{"role":"system","content":"You are a JSON-only assistant. Always respond with valid JSON."},{"role":"user","content":"Return a JSON object with fields: sentiment (positive/negative/neutral) and confidence (0.0-1.0) for this text: I love this product!"}],"max_tokens":4096,"temperature":0.1,"response_format":{"type":"json_object"}}'

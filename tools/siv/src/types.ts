@@ -17,9 +17,11 @@ export interface Finding {
   related_files: string[];
   source: FindingSource;
   status: FindingStatus;
+  group?: string;
 }
 
 export interface Promotion {
+  id: string;
   ts: string;
   finding_ids: string[];
   scope: "project" | "global";
@@ -28,5 +30,5 @@ export interface Promotion {
   category: string;
   rule: string;
   action_taken: string;
-  target_file: string;
+  status: "active" | "superseded";
 }

@@ -41,14 +41,14 @@ program
 program
   .command("analyze")
   .description("Analyze session transcripts for learnings")
-  .option("--latest <n>", "Number of recent sessions", "5")
+  .option("--latest <n>", "Number of recent sessions (default: 20)")
   .option("--project-path <path>", "Filter by project path")
   .option("--since <date>", "Sessions since date (YYYY-MM-DD)")
   .option("--session <id>", "Analyze specific session")
   .action(async (options) => {
     const { executeAnalyze } = await import("./commands/analyze.js");
     await executeAnalyze({
-      latest: parseInt(options.latest),
+      latest: options.latest ? parseInt(options.latest) : undefined,
       projectPath: options.projectPath,
       since: options.since,
       session: options.session,
@@ -106,14 +106,41 @@ program
   });
 
 program
+  .command("doctor")
+  .description("Check configuration and API connectivity")
+  .action(async () => {
+    const { executeDoctor } = await import("./commands/doctor.js");
+    await executeDoctor();
+  });
+
+program
+  .command("group")
+  .description("Semantically group similar findings using LLM")
+  .option("--dry-run", "Show groups without updating findings.jsonl")
+  .option("--reset", "Clear existing group labels before re-grouping")
+  .option("-y, --yes", "Skip confirmation prompts")
+  .action(async (options) => {
+    const { executeGroup } = await import("./commands/group.js");
+    await executeGroup({
+      dryRun: options.dryRun || false,
+      reset: options.reset || false,
+      yes: options.yes || false,
+    });
+  });
+
+program
   .command("run_promotion")
   .description("Scan findings and promote patterns to memory")
   .option("--dry-run", "Show what would be promoted without doing it")
+  .option("--reset", "Reset all findings to pending and clear promotions before running")
+  .option("-y, --yes", "Skip confirmation prompts")
   .option("--window <days>", "Days to look back", "3")
   .action(async (options) => {
     const { executeRunPromotion } = await import("./commands/run-promotion.js");
     await executeRunPromotion({
       dryRun: options.dryRun || false,
+      reset: options.reset || false,
+      yes: options.yes || false,
       window: parseInt(options.window),
     });
   });
