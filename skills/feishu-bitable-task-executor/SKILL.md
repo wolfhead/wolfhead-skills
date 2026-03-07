@@ -32,9 +32,11 @@ If TOOLS.md has no "## Task Manager" section, abort and inform user.
 2. Resolve app_token + table_id via feishu_bitable_get_meta
 3. Query tasks where 任务状态 = "待处理"
 4. Sort by priority: P0 > P1 > P2
-5. Spawn subagents (respect maxConcurrent limit)
-6. Update task records after execution
-7. Notify user if 追踪模式 = "主动汇报"
+5. For each task:
+   a. Invoke /model-selector with task content
+   b. Spawn subagent with selected model
+   c. Update task record after execution
+   d. Notify user if 追踪模式 = "主动汇报"
 ```
 
 ## Execution Rules
@@ -55,10 +57,14 @@ If TOOLS.md has no "## Task Manager" section, abort and inform user.
 
 For each task:
 
+1. Invoke `/model-selector` with 任务详情
+2. Spawn subagent with returned model:
+
 ```json
 {
   "runtime": "subagent",
   "mode": "run",
+  "model": "<from model-selector>",
   "task": "<任务详情>",
   "label": "task-<record_id>",
   "timeoutSeconds": 300
@@ -159,10 +165,11 @@ Agent: [Loads skill, scans, executes, reports]
 
 ## Dependencies
 
+- **model-selector skill**: Invoke to select optimal model for each task
 - **feishu-bitable-task-manager skill**: Use for task record operations
 - **feishu-bitable skill**: Use for Bitable operations
 - **TOOLS.md**: User configuration (URL, table name, concurrency)
-- **sessions_spawn**: Spawn subagents for task execution
+- **sessions_spawn**: Spawn subagents with selected model
 - **message tool**: User notifications (when 主动汇报)
 
 ## First-Time Setup
