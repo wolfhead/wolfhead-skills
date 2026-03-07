@@ -1,9 +1,9 @@
 ---
-name: feishu-bitable-task-creator
+name: feishu-bitable-task-manager
 description: Use when creating or managing task records in Feishu Bitable — creating, updating, querying, completing task entries. Triggers include "任务", "task", "待办", "todo", "创建任务", "完成任务", or any mention of task status/priority. Pure CRUD skill for task records, does NOT execute tasks.
 ---
 
-# Feishu Bitable Task Creator
+# Feishu Bitable Task Manager
 
 Create and manage task records in Feishu Bitable. Pure CRUD operations — this skill does NOT execute tasks.
 

@@ -159,7 +159,7 @@ Agent: [Loads skill, scans, executes, reports]
 
 ## Dependencies
 
-- **feishu-bitable-task-creator skill**: Use for task record operations
+- **feishu-bitable-task-manager skill**: Use for task record operations
 - **feishu-bitable skill**: Use for Bitable operations
 - **TOOLS.md**: User configuration (URL, table name, concurrency)
 - **sessions_spawn**: Spawn subagents for task execution
