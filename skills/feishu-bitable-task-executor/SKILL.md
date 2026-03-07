@@ -32,10 +32,49 @@ If TOOLS.md has no "## Task Manager" section, abort and inform user.
 2. Resolve app_token + table_id via feishu_bitable_get_meta
 3. Query tasks where 任务状态 = "待处理"
 4. Sort by priority: P0 > P1 > P2
-5. Spawn subagents (respect maxConcurrent limit)
-6. Update task records after execution
-7. Notify user if 追踪模式 = "主动汇报"
+5. For each task:
+   a. Select model based on task attributes (see Model Selection Rules)
+   b. Spawn subagent with selected model
+   c. Update task record after execution
+   d. Notify user if 追踪模式 = "主动汇报"
 ```
+
+## Model Selection Rules
+
+Evaluate rules top-to-bottom. First match wins.
+
+```
+1. Task requires vision/image input?
+   ├── Budget constrained? → ppio/qwen/qwen3.5-397b-a17b
+   └── Quality critical?   → anthropic/claude-sonnet-4-20250514
+
+2. Task is math-heavy, calculation, or competitive programming?
+   → ppio/deepseek/deepseek-v3.2
+
+3. Task is autonomous multi-step coding (SWE-style)?
+   → ppio/minimax/minimax-m2.5
+
+4. Task is code review or multi-file refactoring?
+   → anthropic/claude-sonnet-4-20250514
+
+5. Task is complex architecture design or deep debugging?
+   → anthropic/claude-opus-4-20250514
+
+6. Task is high-volume batch processing where cost matters?
+   → ppio/deepseek/deepseek-v3.2
+
+7. Task involves multilingual content (non-English dominant)?
+   → ppio/qwen/qwen3.5-397b-a17b
+
+8. Everything else
+   → ppio/zai-org/glm-5 (default)
+```
+
+<HARD-GATE>
+FORBIDDEN: Selecting a model based on "quality feel" or preference.
+FORBIDDEN: Defaulting to expensive models "just in case."
+MUST: Always justify model selection by citing which rule matched.
+</HARD-GATE>
 
 ## Execution Rules
 
@@ -54,6 +93,10 @@ If TOOLS.md has no "## Task Manager" section, abort and inform user.
 ### Subagent Execution
 
 For each task:
+
+1. Analyze task content (任务名称 + 任务详情)
+2. Apply Model Selection Rules to determine best model
+3. Spawn subagent with selected model:
 
 ```json
 {
