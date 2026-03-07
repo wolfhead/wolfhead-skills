@@ -1,16 +1,29 @@
 ---
 name: feishu-bitable
-description: |
-  Feishu Bitable (多维表格) operations: read fields, list records, create/update records. Triggers: "bitable", "多维表格", "表格", or any Bitable URL (base/ or wiki/ with table=). Pure tool skill — no business logic.
+description: Use when working with Feishu Bitable (多维表格) — reading fields, listing records, creating or updating rows. Triggers include "bitable", "多维表格", "表格", or any Bitable URL (base/ or wiki/ with table=).
 ---
 
 # Feishu Bitable Operations
 
-Bitable = Feishu's spreadsheet-database hybrid. Use `feishu_bitable_*` tools.
+Pure tool skill for Feishu's spreadsheet-database hybrid. Use `feishu_bitable_*` tools.
 
-## Quick Start
+## When to Use
 
-### 1. Parse URL → Get Tokens
+- Reading or writing Bitable records
+- Understanding table schema (field names, types)
+- Any URL containing `/base/` or `/wiki/` with `?table=`
+
+## Workflow
+
+```
+get_meta → list_fields → list_records / create_record / update_record
+```
+
+Always call `list_fields` first to discover field names and types.
+
+## Quick Reference
+
+### Parse URL → Get Tokens
 
 ```json
 { "url": "https://xxx.feishu.cn/base/ABC123?table=XYZ789" }
@@ -18,15 +31,13 @@ Bitable = Feishu's spreadsheet-database hybrid. Use `feishu_bitable_*` tools.
 
 Returns `app_token`, `table_id`, table list.
 
-### 2. List Fields (Understand Schema)
+### List Fields
 
 ```json
 { "app_token": "ABC123", "table_id": "XYZ789" }
 ```
 
-Returns field names, types, and option values for select fields.
-
-### 3. List Records
+### List Records
 
 ```json
 { "app_token": "ABC123", "table_id": "XYZ789", "page_size": 100 }
@@ -34,30 +45,22 @@ Returns field names, types, and option values for select fields.
 
 Use `page_token` for pagination when `has_more: true`.
 
-### 4. CRUD
+### Create Record
 
-**Create:**
 ```json
-{
-  "app_token": "ABC123",
-  "table_id": "XYZ789",
-  "fields": { "标题": "New", "状态": "进行中" }
-}
+{ "app_token": "ABC123", "table_id": "XYZ789", "fields": { "标题": "New" } }
 ```
 
-**Get one:**
+### Update Record
+
+```json
+{ "app_token": "ABC123", "table_id": "XYZ789", "record_id": "recXXX", "fields": { "状态": "完成" } }
+```
+
+### Get Single Record
+
 ```json
 { "app_token": "ABC123", "table_id": "XYZ789", "record_id": "recXXX" }
-```
-
-**Update:**
-```json
-{
-  "app_token": "ABC123",
-  "table_id": "XYZ789",
-  "record_id": "recXXX",
-  "fields": { "状态": "完成" }
-}
 ```
 
 ## Field Types
@@ -68,22 +71,13 @@ Use `page_token` for pagination when `has_more: true`.
 | 2 | Number | `123` |
 | 3 | SingleSelect | `"Option"` |
 | 4 | MultiSelect | `["A", "B"]` |
-| 5 | DateTime | `1772812800000` (ms) |
-| 7 | Checkbox | `true` |
+| 5 | DateTime | `1772812800000` (timestamp ms) |
+| 7 | Checkbox | `true` / `false` |
 | 11 | User | `[{ "id": "ou_xxx" }]` |
-| 15 | URL | `{ "text": "显示文本", "link": "https://..." }` |
+| 15 | URL | `{ "text": "Display", "link": "https://..." }` |
 | 17 | Attachment | `[{ "file_token": "..." }]` |
 | 1005 | AutoNumber | Read-only |
 
-## Workflow
-
-```
-get_meta → list_fields → list_records / create_record / update_record
-```
-
-Always call `list_fields` first to discover field names and types.
-
 ## Permissions
 
-- `bitable:bitable` — Read/write
-- `bitable:bitable:readonly` — Read only
+Required: `bitable:bitable` (read/write) or `bitable:bitable:readonly` (read only)
