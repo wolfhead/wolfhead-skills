@@ -1030,6 +1030,20 @@ cloud-deploy/
 
 ---
 
+## 17. Internationalization (i18n)
+
+Skills written in English work cross-lingually — Claude's skill matching is semantic, not keyword-based. A user saying "创建一个新功能" will still trigger a skill described as "Use when implementing a new feature."
+
+**Write skills in English.** Add one line near the top of SKILL.md (after frontmatter or inside `<HARD-GATE>`) to handle non-English users:
+
+```markdown
+Always respond in the same language the user is using.
+```
+
+This single instruction handles most i18n needs without maintaining translated forks or adding non-English examples.
+
+---
+
 ## Sources
 
 This document was compiled from:
