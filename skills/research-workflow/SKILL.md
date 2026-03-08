@@ -1,19 +1,15 @@
 ---
 name: research-workflow
-description: "Use when the user asks about current technology, tools, APIs, libraries, compatibility, recent changes, or any factual topic where training data may be outdated or wrong. Also use when the user explicitly asks to research or investigate something. Forces search-first verification with parallel subagent source gathering before answering — never guess from training data on verifiable questions."
+description: "Use when the user asks about current technology, tools, APIs, libraries, compatibility, recent changes, or any factual topic where training data may be outdated. Also use when the user explicitly asks to research or investigate something. Forces search-first verification — never guess from training data on verifiable questions."
 ---
 
 # Research Workflow
-
-## Overview
-
-Get correct answers by searching and verifying first. Never answer verifiable questions from training data alone. Spawn cheap subagents in parallel to gather from multiple sources, then synthesize with a stronger model.
 
 <HARD-RULE>
 If the question involves current state of technology, tools, APIs, libraries, compatibility, or any factual claim that could have changed since training cutoff — MUST search before answering. No exceptions. Do NOT answer from training data and then offer to search. Search FIRST.
 </HARD-RULE>
 
-## Decision: Search or Answer Directly?
+## When to Search vs Answer Directly
 
 ```
 User asks a question
@@ -28,73 +24,50 @@ User asks a question
 
 When in doubt, search. The cost of an unnecessary search is low. The cost of a confident wrong answer is high.
 
-## The Pattern
+## Process
 
-### 1. Scope
+### 1. Scope the Question
 
-Before spawning subagents, clarify internally:
+Before searching, clarify internally:
 - What specific claim needs verification?
 - What would a wrong answer look like? (This guides what to check.)
-- Single fact or multiple pieces of information?
 
 If the question is ambiguous, ask the user one clarifying question before searching.
 
-### 2. Scout — Discover Sources
+### 2. Search and Read
 
-Spawn one scout subagent (cheap model) to find the right sources for this topic. The scout does NOT extract information — it only identifies where to look.
+**Date anchoring:** ALWAYS include the current year (or month+year) in search queries when recency matters — e.g., "Next.js server actions 2026" not "Next.js server actions". This is the single highest-impact trick for getting relevant results.
 
-**Scout instructions:**
+**Query strategy:** Run 2-3 web searches with different phrasings to cast a wide net:
+- One specific/technical query (e.g., "Next.js 15 server actions breaking changes")
+- One broader query (e.g., "Next.js server actions 2026")
+- One from a different angle if needed (e.g., "Next.js server actions migration guide")
 
-```
-Topic: [the question]
-Task: Find 3-6 specific sources relevant to this topic.
-For each source, return:
-  - URL or identifier (e.g., GitHub repo URL, docs page URL, specific forum thread)
-  - What type of source it is (official docs, GitHub repo, blog post, forum thread)
-  - Why it's likely relevant
-Do NOT read or summarize the sources. Just find them.
-```
+**Reading sources:** When fetching a page, always ask a focused question — don't dump the whole page into context. Extract only what's relevant to the user's question. Prioritize sources in this order:
+1. Official documentation and changelogs
+2. GitHub repos (READMEs, issues, releases)
+3. Recent blog posts and technical articles
+4. Forum threads (Stack Overflow, Reddit, HN)
 
-The scout searches broadly (web search, GitHub search) so that the extraction subagents don't have to.
+**Handling fetch failures:** If `web_fetch` returns empty or partial content (common with JS-heavy sites), try:
+- The GitHub raw URL instead of the rendered page
+- A blog/article discussing the same topic
+- An alternative source from search results
+- Do NOT treat a failed fetch as "no information exists"
 
-### 3. Extract — Targeted Subagents Per Source
+**Parallelism:** For broad or multi-faceted topics, spawn 2-3 parallel subagents — each searching a different angle. Each subagent should search, read, and summarize with relevance judgments.
 
-Take the scout's source list and spawn one subagent per source (cheap model, in parallel). Each subagent gets a specific URL or location and a specific question to answer from that source.
+### 3. Cross-Reference and Answer
 
-**Extraction subagent instructions:**
-
-```
-Source: [specific URL or location from scout]
-Question: [what to extract from this source]
-Task: Read this specific source and extract facts relevant to the question.
-Return: Raw facts only. No conclusions or opinions.
-If the source is inaccessible or irrelevant: Say so. Do not guess.
-```
-
-Every extraction subagent has a guided, specific job:
-- A specific source to read (not "search the web")
-- A specific question to answer from that source
-- No freedom to wander or draw conclusions
-
-Scale to the scout's findings:
-- Scout found 2-3 good sources → 2-3 extraction subagents
-- Scout found 5-6 sources → pick the 3-4 most relevant, skip the rest
-
-### 4. Synthesize
-
-Cross-reference all extraction subagent findings with the stronger model:
-
-- **Sources agree** → High confidence. State the answer directly.
+- **Sources agree** → State the answer directly with confidence.
 - **Sources disagree** → Tell the user. Present both positions. Do not silently pick one.
 - **Gaps found** → State what could not be verified. Do not fill gaps with training data.
 
-### 5. Deliver
+## Delivery
 
-Give the answer:
 - Direct and confident when sources agree
 - No source URL lists unless user asks or sources conflict
 - No "according to my research" preamble
-- No academic formatting
 - If conflicts or gaps exist, mention them naturally within the answer
 
 ## Anti-Patterns
@@ -102,38 +75,11 @@ Give the answer:
 | Wrong | Right |
 |-------|-------|
 | Answer from training data, then offer to search | Search first, then answer |
-| "Based on my knowledge..." | Verify, then state as fact |
+| Search without the current year in query | Include year/month for recency |
 | One source is enough | Cross-reference 2-3 sources minimum |
 | Silently pick one conflicting source | Tell the user sources disagree |
 | Dump a list of URLs | Just give the correct answer |
-| "I couldn't find anything" then guess from training data | State the gap, stop there |
-| Subagents do broad unfocused searching | Scout finds sources, extractors read specific URLs |
-| Subagents draw conclusions | Subagents return raw facts only |
-
-## Example
-
-**User:** "Are OpenClaw skills compatible with Claude Code?"
-
-**Wrong approach:**
-> "No, they use different runtimes and formats. You'd need to port skills manually."
-
-(Confident, wrong — answered from stale training data without checking.)
-
-**Right approach:**
-
-1. **Scope:** Need to verify current cross-compatibility between OpenClaw SKILL.md and Claude Code
-
-2. **Scout:** Spawn scout subagent → finds sources:
-   - `https://github.com/openclaw/openclaw` (official repo)
-   - `https://github.com/anthropics/claude-code` (Claude Code docs)
-   - `https://github.com/jdrhyne/agent-skills` (cross-agent skills project)
-   - A blog post comparing the two platforms
-
-3. **Extract:** Spawn 3 targeted subagents:
-   - Subagent A → read OpenClaw repo for skill format docs
-   - Subagent B → read Claude Code docs for skill loading mechanism
-   - Subagent C → read agent-skills repo for cross-compatibility evidence
-
-4. **Synthesize:** All three confirm SKILL.md works across platforms — skills are instructions, not executable code
-
-5. **Answer:** "Yes — skills in SKILL.md format work across OpenClaw, Claude Code, and other ACP harnesses. They're markdown instructions that agents adapt to their runtime, so the same skill file works on multiple platforms."
+| "I couldn't find anything" then guess | State the gap, stop there |
+| Fetch failed → assume no info exists | Try alternative URLs or sources |
+| Fetch entire page with no focus | Ask a specific question when reading |
+| Separate "find URLs" and "read URLs" steps | Search and read in one pass |
