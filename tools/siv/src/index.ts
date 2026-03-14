@@ -114,6 +114,17 @@ program
   });
 
 program
+  .command("mark")
+  .description("Record an emotion marker")
+  .argument("<type>", "Marker type (frustration, correction, breakthrough, surprise)")
+  .argument("[context...]", "Optional free-text description")
+  .action(async (type: string, context: string[]) => {
+    const { executeMark } = await import("./commands/mark.js");
+    const result = executeMark(type, context.join(" ") || undefined);
+    console.log(result);
+  });
+
+program
   .command("group")
   .description("Semantically group similar insights using LLM")
   .option("--dry-run", "Show groups without updating insights.jsonl")
