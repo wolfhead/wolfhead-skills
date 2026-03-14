@@ -919,15 +919,18 @@ export function extractCompactions(records: Rec[]): CompactionInfo[] {
  */
 export function extractEmotionMarkers(records: Rec[]): EmotionMarker[] {
   const markers: EmotionMarker[] = [];
-  let turnIndex = 0;
+  let humanCount = 0;
 
   for (const rec of records) {
     const cat = classifyRecord(rec);
     if (cat === "human_message") {
-      turnIndex++;
+      humanCount++;
       continue;
     }
     if (rec.type !== "assistant") continue;
+    // turn_index = number of human messages seen so far, 0-based.
+    // A marker after the 1st human message gets index 0.
+    const turnIndex = Math.max(0, humanCount - 1);
 
     const msg = (rec.message ?? {}) as Rec;
     const content = msg.content;

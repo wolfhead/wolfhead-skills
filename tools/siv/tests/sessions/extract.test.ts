@@ -1551,7 +1551,7 @@ describe("extractEmotionMarkers", () => {
     expect(markers[0]).toEqual({
       type: "frustration",
       context: "stuck on API",
-      turn_index: 1,
+      turn_index: 0,
     });
   });
 
@@ -1647,7 +1647,7 @@ describe("extractEmotionMarkers", () => {
     ];
     const markers = extractEmotionMarkers(records);
     expect(markers).toHaveLength(1);
-    expect(markers[0].turn_index).toBe(3);
+    expect(markers[0].turn_index).toBe(2);
   });
 
   it("extracts multiple markers from different turns", () => {
@@ -1684,9 +1684,9 @@ describe("extractEmotionMarkers", () => {
     const markers = extractEmotionMarkers(records);
     expect(markers).toHaveLength(2);
     expect(markers[0].type).toBe("frustration");
-    expect(markers[0].turn_index).toBe(1);
+    expect(markers[0].turn_index).toBe(0);
     expect(markers[1].type).toBe("breakthrough");
-    expect(markers[1].turn_index).toBe(2);
+    expect(markers[1].turn_index).toBe(1);
   });
 
   it("returns empty array when no markers present", () => {
