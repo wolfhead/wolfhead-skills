@@ -1,7 +1,7 @@
 /**
  * Build the grouping prompt for LLM-based semantic similarity grouping.
  *
- * The LLM groups findings by same actionable advice — findings that
+ * The LLM groups insights by same actionable advice — insights that
  * give the same concrete recommendation end up together, regardless
  * of project or category.
  */
@@ -10,7 +10,7 @@ export interface GroupOutput {
   groups: Record<string, string[]>;
 }
 
-export function buildGroupPrompt(findings: Array<{
+export function buildGroupPrompt(insights: Array<{
   id: string;
   category: string;
   summary: string;
@@ -21,30 +21,30 @@ export function buildGroupPrompt(findings: Array<{
   system: string;
   user: string;
 } {
-  const system = `You are a finding deduplication engine. Group findings that give the SAME actionable advice.
+  const system = `You are an insight deduplication engine. Group insights that give the SAME actionable advice.
 
 ## Grouping criteria
 
-Two findings belong in the same group ONLY if:
+Two insights belong in the same group ONLY if:
 - They recommend the same concrete action (e.g., both say "Read before Write")
 - They could be merged into one rule without losing distinct advice
 
-Two findings do NOT belong together if:
+Two insights do NOT belong together if:
 - They share a topic/domain but give different advice
 - Merging them would produce a vague umbrella rule
 
 ## Pre-assigned groups
 
-Some findings have a \`current_group\` field — these MUST keep that exact group key. Only assign group keys to findings without \`current_group\`. Use existing group keys as anchors: if a new finding matches an existing group, assign it to that same key.
+Some insights have a \`current_group\` field — these MUST keep that exact group key. Only assign group keys to insights without \`current_group\`. Use existing group keys as anchors: if a new insight matches an existing group, assign it to that same key.
 
 ## Key label format
 
 Each group key: 2-5 words, snake_case, describing the specific advice (not the domain).
-A finding belongs to exactly one group.
-Findings with no similar peers get their own group.
+An insight belongs to exactly one group.
+Insights with no similar peers get their own group.
 
 <example>
-Input findings:
+Input insights:
 - A: "Always Read files before Write/Edit to verify target location"
 - B: "Don't attempt Edit without a prior Read, even if you think you know the content"
 - C: "Check file existence with 'test -f' before Read for uncertain paths"
@@ -70,7 +70,7 @@ WRONG grouping (over-grouped by domain):
 }
 
 Why wrong:
-- C gives different advice than A/B (existence check ≠ read-before-write)
+- C gives different advice than A/B (existence check != read-before-write)
 - D and E are different recommendations despite both being about agent architecture
 </example>
 
@@ -84,9 +84,9 @@ Return ONLY valid JSON:
   }
 }
 
-Every finding ID from the input must appear exactly once in the output.`;
+Every insight ID from the input must appear exactly once in the output.`;
 
-  const user = `Group these findings by same actionable advice:\n\n${JSON.stringify(findings, null, 2)}`;
+  const user = `Group these insights by same actionable advice:\n\n${JSON.stringify(insights, null, 2)}`;
 
   return { system, user };
 }

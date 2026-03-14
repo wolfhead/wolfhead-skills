@@ -1,7 +1,7 @@
 /**
  * End-to-end smoke test for the siv data pipeline.
  *
- * Tests the full flow: log -> findings.jsonl -> group -> promotions.jsonl
+ * Tests the full flow: log -> insights.jsonl -> group -> rules.jsonl
  * -> retrieve, without any LLM calls.
  */
 
@@ -10,10 +10,10 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { executeLog } from "../../src/commands/log.js";
-import { readJsonl, appendJsonl, updateFindingField } from "../../src/storage.js";
-import { buildGroupsFromFindings } from "../../src/commands/run-promotion.js";
+import { readJsonl, appendJsonl, updateInsightField } from "../../src/storage.js";
+import { buildGroupsFromInsights } from "../../src/commands/run.js";
 import { executeRetrieve } from "../../src/commands/retrieve.js";
-import type { Finding, Promotion } from "../../src/types.js";
+import type { Insight, Rule } from "../../src/types.js";
 
 vi.mock("../../src/config.js", () => ({
   loadConfig: vi.fn(),
@@ -26,14 +26,14 @@ const mockedLoadConfig = vi.mocked(loadConfig);
 describe("E2E smoke test", () => {
   let tmpDir: string;
   let sivDir: string;
-  let findingsPath: string;
-  let promotionsPath: string;
+  let insightsPath: string;
+  let rulesPath: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "siv-e2e-"));
     sivDir = path.join(tmpDir, ".siv");
-    findingsPath = path.join(sivDir, "findings.jsonl");
-    promotionsPath = path.join(sivDir, "promotions.jsonl");
+    insightsPath = path.join(sivDir, "insights.jsonl");
+    rulesPath = path.join(sivDir, "rules.jsonl");
     fs.mkdirSync(sivDir, { recursive: true });
 
     mockedLoadConfig.mockReturnValue({
@@ -41,8 +41,8 @@ describe("E2E smoke test", () => {
       apiKey: "test-key",
       apiBase: "https://api.test.com",
       model: "test-model",
-      findingsPath,
-      promotionsPath,
+      insightsPath,
+      rulesPath,
       backupsDir: path.join(sivDir, "backups"),
       promotionThreshold: {
         minSessions: 2,
@@ -57,8 +57,8 @@ describe("E2E smoke test", () => {
     vi.restoreAllMocks();
   });
 
-  it("full data pipeline: log -> group -> promote -> retrieve", () => {
-    // ─── Step 1: Log findings ───
+  it("full data pipeline: log -> group -> consolidate -> retrieve", () => {
+    // ─── Step 1: Log insights ───
 
     const log1 = executeLog(
       {
@@ -102,16 +102,16 @@ describe("E2E smoke test", () => {
     const groupAssignments = new Map<string, string>();
     groupAssignments.set(log1.id, "read_before_write");
     groupAssignments.set(log2.id, "read_before_write");
-    groupAssignments.set(log3.id, "check_file_existence"); // different advice → different group
-    updateFindingField(findingsPath, groupAssignments, "group");
+    groupAssignments.set(log3.id, "check_file_existence"); // different advice -> different group
+    updateInsightField(insightsPath, groupAssignments, "group");
 
     // ─── Step 3: Build groups — only read_before_write has 2+ ───
 
-    const findings = readJsonl<Finding>(findingsPath);
-    const candidates = buildGroupsFromFindings(findings);
+    const insights = readJsonl<Insight>(insightsPath);
+    const candidates = buildGroupsFromInsights(insights);
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].findings).toHaveLength(2);
+    expect(candidates[0].insights).toHaveLength(2);
 
     // ─── Step 4: Retrieve returns empty initially ───
 
@@ -122,12 +122,12 @@ describe("E2E smoke test", () => {
     );
     expect(emptyResult).toBe("");
 
-    // ─── Step 5: Write a promotion directly to promotions.jsonl ───
+    // ─── Step 5: Write a rule directly to rules.jsonl ───
 
-    const promotion: Promotion = {
-      id: "PRM-20260305-abc",
+    const rule: Rule = {
+      id: "RUL-20260305-abc",
       ts: new Date().toISOString(),
-      finding_ids: [log1.id, log2.id],
+      insight_ids: [log1.id, log2.id],
       scope: "project",
       project: "wolfhead_skills",
       project_path: projectPath,
@@ -136,9 +136,9 @@ describe("E2E smoke test", () => {
       action_taken: "create",
       status: "active",
     };
-    appendJsonl(promotionsPath, promotion as unknown as Record<string, unknown>);
+    appendJsonl(rulesPath, rule as unknown as Record<string, unknown>);
 
-    // ─── Step 6: Retrieve returns the promoted content ───
+    // ─── Step 6: Retrieve returns the consolidated content ───
 
     const retrieved = executeRetrieve(
       { projectPath, global: false, format: "text" },
@@ -153,11 +153,11 @@ describe("E2E smoke test", () => {
       tmpDir
     );
     const parsed = JSON.parse(jsonResult);
-    expect(parsed.promotions).toHaveLength(1);
-    expect(parsed.promotions[0].rule).toContain("Always Read a file before Write");
+    expect(parsed.rules).toHaveLength(1);
+    expect(parsed.rules[0].rule).toContain("Always Read a file before Write");
   });
 
-  it("singleton groups are not promoted", () => {
+  it("singleton groups are not consolidated", () => {
     executeLog(
       {
         category: "error",
@@ -179,26 +179,26 @@ describe("E2E smoke test", () => {
       tmpDir
     );
 
-    // Each finding gets its own group (different advice)
-    const findings = readJsonl<Finding>(findingsPath);
+    // Each insight gets its own group (different advice)
+    const insights = readJsonl<Insight>(insightsPath);
     const groupAssignments = new Map<string, string>();
-    groupAssignments.set(findings[0].id, "group_a");
-    groupAssignments.set(findings[1].id, "group_b");
-    updateFindingField(findingsPath, groupAssignments, "group");
+    groupAssignments.set(insights[0].id, "group_a");
+    groupAssignments.set(insights[1].id, "group_b");
+    updateInsightField(insightsPath, groupAssignments, "group");
 
-    const refreshed = readJsonl<Finding>(findingsPath);
-    const candidates = buildGroupsFromFindings(refreshed);
+    const refreshed = readJsonl<Insight>(insightsPath);
+    const candidates = buildGroupsFromInsights(refreshed);
 
     expect(candidates).toHaveLength(0);
   });
 
-  it("superseded promotions are excluded from retrieve", () => {
+  it("superseded rules are excluded from retrieve", () => {
     const projectPath = "/Users/me/work/project";
 
-    appendJsonl(promotionsPath, {
-      id: "PRM-20260305-old",
+    appendJsonl(rulesPath, {
+      id: "RUL-20260305-old",
       ts: "2026-03-05T00:00:00Z",
-      finding_ids: ["LRN-1"],
+      insight_ids: ["INS-1"],
       scope: "project",
       project: "project",
       project_path: projectPath,
@@ -208,10 +208,10 @@ describe("E2E smoke test", () => {
       status: "superseded",
     });
 
-    appendJsonl(promotionsPath, {
-      id: "PRM-20260305-new",
+    appendJsonl(rulesPath, {
+      id: "RUL-20260305-new",
       ts: "2026-03-05T01:00:00Z",
-      finding_ids: ["LRN-2"],
+      insight_ids: ["INS-2"],
       scope: "project",
       project: "project",
       project_path: projectPath,

@@ -1,12 +1,12 @@
-export type FindingCategory = "correction" | "error" | "knowledge_gap" | "best_practice" | "feature_request";
+export type InsightCategory = "correction" | "error" | "knowledge_gap" | "best_practice" | "feature_request";
 export type Priority = "low" | "medium" | "high" | "critical";
-export type FindingStatus = "pending" | "promoted" | "dismissed";
-export type FindingSource = "analyze" | "manual" | "hook";
+export type InsightStatus = "pending" | "consolidated" | "dismissed";
+export type InsightSource = "analyze" | "manual" | "hook";
 
-export interface Finding {
+export interface Insight {
   id: string;
   ts: string;
-  category: FindingCategory;
+  category: InsightCategory;
   summary: string;
   details: string;
   priority: Priority;
@@ -15,15 +15,15 @@ export interface Finding {
   session: string;
   tags: string[];
   related_files: string[];
-  source: FindingSource;
-  status: FindingStatus;
+  source: InsightSource;
+  status: InsightStatus;
   group?: string;
 }
 
-export interface Promotion {
+export interface Rule {
   id: string;
   ts: string;
-  finding_ids: string[];
+  insight_ids: string[];
   scope: "project" | "global";
   project: string;
   project_path: string;

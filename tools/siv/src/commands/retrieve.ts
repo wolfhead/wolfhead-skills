@@ -1,13 +1,13 @@
 /**
- * Retrieve command: reads promoted rules from promotions.jsonl.
+ * Retrieve command: reads consolidated rules from rules.jsonl.
  *
  * Filters by project path and/or global scope, returns only active
- * promotions, formatted as text or JSON.
+ * rules, formatted as text or JSON.
  */
 
 import { loadConfig } from "../config.js";
 import { readJsonl } from "../storage.js";
-import type { Promotion } from "../types.js";
+import type { Rule } from "../types.js";
 
 export interface RetrieveOptions {
   projectPath?: string;
@@ -16,9 +16,9 @@ export interface RetrieveOptions {
 }
 
 /**
- * Retrieve promoted rules from promotions.jsonl.
+ * Retrieve consolidated rules from rules.jsonl.
  *
- * Returns active promotions filtered by project/global scope,
+ * Returns active rules filtered by project/global scope,
  * grouped by category, as text bullets or JSON.
  */
 export function executeRetrieve(
@@ -26,13 +26,13 @@ export function executeRetrieve(
   homeDir?: string
 ): string {
   const config = loadConfig(homeDir);
-  const allPromotions = readJsonl<Promotion>(config.promotionsPath);
+  const allRules = readJsonl<Rule>(config.rulesPath);
 
   // Filter to active only
-  const active = allPromotions.filter((p) => p.status === "active");
+  const active = allRules.filter((p) => p.status === "active");
 
   // Filter by scope
-  const matching: Promotion[] = [];
+  const matching: Rule[] = [];
 
   if (options.projectPath) {
     for (const p of active) {
@@ -54,11 +54,11 @@ export function executeRetrieve(
     return JSON.stringify({
       project: options.projectPath ?? null,
       global: options.global,
-      promotions: matching.map((p) => ({
+      rules: matching.map((p) => ({
         id: p.id,
         category: p.category,
         rule: p.rule,
-        finding_ids: p.finding_ids,
+        insight_ids: p.insight_ids,
         ts: p.ts,
       })),
     });
@@ -69,7 +69,7 @@ export function executeRetrieve(
     return "";
   }
 
-  const byCategory = new Map<string, Promotion[]>();
+  const byCategory = new Map<string, Rule[]>();
   for (const p of matching) {
     const arr = byCategory.get(p.category) ?? [];
     arr.push(p);
@@ -77,9 +77,9 @@ export function executeRetrieve(
   }
 
   const sections: string[] = [];
-  for (const [category, promotions] of byCategory) {
+  for (const [category, rules] of byCategory) {
     const lines = [`## ${category}`, ""];
-    for (const p of promotions) {
+    for (const p of rules) {
       lines.push(`- ${p.rule}`);
     }
     sections.push(lines.join("\n"));

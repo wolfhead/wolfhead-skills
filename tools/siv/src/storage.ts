@@ -3,19 +3,17 @@ import path from "path";
 import crypto from "crypto";
 
 /**
- * Generate a finding ID with format: PREFIX-YYYYMMDD-xxx
- * where PREFIX is LRN for learning categories or ERR for error categories,
- * and xxx is 3 random hex chars.
+ * Generate an insight ID with format: INS-YYYYMMDD-xxx
+ * where xxx is 3 random hex chars.
  */
-export function generateId(category: string): string {
-  const prefix = category === "error" ? "ERR" : "LRN";
+export function generateInsightId(): string {
   const now = new Date();
   const dateStr =
     now.getFullYear().toString() +
     (now.getMonth() + 1).toString().padStart(2, "0") +
     now.getDate().toString().padStart(2, "0");
   const hex = crypto.randomBytes(2).toString("hex").slice(0, 3);
-  return `${prefix}-${dateStr}-${hex}`;
+  return `INS-${dateStr}-${hex}`;
 }
 
 /**
@@ -53,10 +51,6 @@ export function readJsonl<T>(filePath: string): T[] {
 }
 
 /**
- * Update the status field of findings matching the given IDs.
- * Reads all lines, updates matching ones, rewrites the file.
- */
-/**
  * Read a file's contents or return empty string if missing.
  */
 export function readFileOrEmpty(filePath: string): string {
@@ -68,25 +62,25 @@ export function readFileOrEmpty(filePath: string): string {
 }
 
 /**
- * Generate a promotion ID with format: PRM-YYYYMMDD-xxx
+ * Generate a rule ID with format: RUL-YYYYMMDD-xxx
  */
-export function generatePromotionId(): string {
+export function generateRuleId(): string {
   const now = new Date();
   const dateStr =
     now.getFullYear().toString() +
     (now.getMonth() + 1).toString().padStart(2, "0") +
     now.getDate().toString().padStart(2, "0");
   const hex = crypto.randomBytes(2).toString("hex").slice(0, 3);
-  return `PRM-${dateStr}-${hex}`;
+  return `RUL-${dateStr}-${hex}`;
 }
 
 /**
- * Update the status field of promotions matching the given IDs.
+ * Update the status field of rules matching the given IDs.
  * Reads all lines, updates matching ones, rewrites the file.
  */
-export function updatePromotionStatus(
+export function updateRuleStatus(
   filePath: string,
-  promotionIds: string[],
+  ruleIds: string[],
   newStatus: string
 ): void {
   if (!fs.existsSync(filePath)) {
@@ -95,7 +89,7 @@ export function updatePromotionStatus(
 
   const content = fs.readFileSync(filePath, "utf-8");
   const lines = content.split("\n").filter((line) => line.trim() !== "");
-  const idSet = new Set(promotionIds);
+  const idSet = new Set(ruleIds);
 
   const updatedLines = lines.map((line) => {
     try {
@@ -114,10 +108,10 @@ export function updatePromotionStatus(
 }
 
 /**
- * Update a field on findings matching the given IDs.
+ * Update a field on insights matching the given IDs.
  * Reads all lines, updates matching ones, rewrites the file.
  */
-export function updateFindingField(
+export function updateInsightField(
   filePath: string,
   updates: Map<string, string>,
   field: string
@@ -145,9 +139,9 @@ export function updateFindingField(
   fs.writeFileSync(filePath, updatedLines.join("\n") + "\n", "utf-8");
 }
 
-export function updateFindingStatus(
+export function updateInsightStatus(
   filePath: string,
-  findingIds: string[],
+  insightIds: string[],
   newStatus: string
 ): void {
   if (!fs.existsSync(filePath)) {
@@ -156,7 +150,7 @@ export function updateFindingStatus(
 
   const content = fs.readFileSync(filePath, "utf-8");
   const lines = content.split("\n").filter((line) => line.trim() !== "");
-  const idSet = new Set(findingIds);
+  const idSet = new Set(insightIds);
 
   const updatedLines = lines.map((line) => {
     try {

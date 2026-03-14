@@ -9,8 +9,8 @@ vi.mock("../../src/config.js", () => ({
     apiBase: "https://api.example.com/v1",
     model: "test-model",
     scansPath: "/tmp/siv-test/scans.jsonl",
-    findingsPath: "/tmp/siv-test/findings.jsonl",
-    promotionsPath: "/tmp/siv-test/promotions.jsonl",
+    insightsPath: "/tmp/siv-test/insights.jsonl",
+    rulesPath: "/tmp/siv-test/rules.jsonl",
     backupsDir: "/tmp/siv-test/backups",
     promotionThreshold: {
       minSessions: 3,
@@ -61,7 +61,7 @@ describe("buildAnalyzePrompt", () => {
     const result = buildAnalyzePrompt('{"metadata":{}}');
 
     expect(result.system).toContain("session analyst");
-    expect(result.system).toContain("findings");
+    expect(result.system).toContain("insights");
     expect(result.system).toContain("correction");
     expect(result.system).toContain("error");
     expect(result.system).toContain("knowledge_gap");
@@ -104,7 +104,7 @@ describe("executeAnalyze", () => {
     vi.clearAllMocks();
   });
 
-  it("logs findings from LLM analysis", async () => {
+  it("logs insights from LLM analysis", async () => {
     mockSearchSessions.mockReturnValue([
       {
         path: "/sessions/test.jsonl",
@@ -133,7 +133,7 @@ describe("executeAnalyze", () => {
 
     mockCallLLM.mockResolvedValue({
       result: {
-        findings: [
+        insights: [
           {
             category: "correction",
             summary: "Used cat instead of Read",
@@ -153,7 +153,7 @@ describe("executeAnalyze", () => {
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    mockExecuteLog.mockReturnValue({ id: "LRN-20260301-abc", status: "logged" });
+    mockExecuteLog.mockReturnValue({ id: "INS-20260301-abc", status: "logged" });
 
     await executeAnalyze({ latest: 5 });
 
@@ -168,7 +168,7 @@ describe("executeAnalyze", () => {
     expect(mockCallLLM).toHaveBeenCalledTimes(1);
     expect(mockExecuteLog).toHaveBeenCalledTimes(2);
 
-    // First finding
+    // First insight
     expect(mockExecuteLog).toHaveBeenCalledWith({
       category: "correction",
       summary: "Used cat instead of Read",
@@ -181,7 +181,7 @@ describe("executeAnalyze", () => {
       tags: "tools, read",
     });
 
-    // Second finding
+    // Second insight
     expect(mockExecuteLog).toHaveBeenCalledWith({
       category: "error",
       summary: "Edit failed due to non-unique match",
@@ -290,7 +290,7 @@ describe("executeAnalyze", () => {
 
     mockCallLLM.mockResolvedValue({
       result: {
-        findings: [
+        insights: [
           {
             category: "invalid_category",
             summary: "Bad category test",
@@ -303,7 +303,7 @@ describe("executeAnalyze", () => {
       usage: { input_tokens: 50, output_tokens: 25 },
     });
 
-    mockExecuteLog.mockReturnValue({ id: "LRN-20260301-xyz", status: "logged" });
+    mockExecuteLog.mockReturnValue({ id: "INS-20260301-xyz", status: "logged" });
 
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await executeAnalyze({});
@@ -349,7 +349,7 @@ describe("executeAnalyze", () => {
     });
 
     mockCallLLM.mockResolvedValue({
-      result: { findings: [] },
+      result: { insights: [] },
       usage: { input_tokens: 50, output_tokens: 10 },
     });
 
@@ -362,7 +362,7 @@ describe("executeAnalyze", () => {
     logSpy.mockRestore();
   });
 
-  it("handles empty findings array from LLM", async () => {
+  it("handles empty insights array from LLM", async () => {
     mockSearchSessions.mockReturnValue([
       {
         path: "/sessions/clean.jsonl",
@@ -386,11 +386,11 @@ describe("executeAnalyze", () => {
     });
 
     mockCallLLM.mockResolvedValue({
-      result: { findings: [] },
+      result: { insights: [] },
       usage: { input_tokens: 50, output_tokens: 10 },
     });
 
-    mockExecuteLog.mockReturnValue({ id: "LRN-20260301-000", status: "logged" });
+    mockExecuteLog.mockReturnValue({ id: "INS-20260301-000", status: "logged" });
 
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await executeAnalyze({});

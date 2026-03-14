@@ -52,18 +52,18 @@ export async function executeDoctor(): Promise<void> {
 
   // 4. Check data files
   results.push({
-    name: "findings.jsonl",
-    status: fs.existsSync(config.findingsPath) ? "pass" : "warn",
-    message: fs.existsSync(config.findingsPath)
-      ? `${countLines(config.findingsPath)} findings`
+    name: "insights.jsonl",
+    status: fs.existsSync(config.insightsPath) ? "pass" : "warn",
+    message: fs.existsSync(config.insightsPath)
+      ? `${countLines(config.insightsPath)} insights`
       : "not yet created (will be created on first use)",
   });
 
   results.push({
-    name: "promotions.jsonl",
-    status: fs.existsSync(config.promotionsPath) ? "pass" : "warn",
-    message: fs.existsSync(config.promotionsPath)
-      ? `${countLines(config.promotionsPath)} promotions`
+    name: "rules.jsonl",
+    status: fs.existsSync(config.rulesPath) ? "pass" : "warn",
+    message: fs.existsSync(config.rulesPath)
+      ? `${countLines(config.rulesPath)} rules`
       : "not yet created (will be created on first use)",
   });
 

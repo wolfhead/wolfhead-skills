@@ -23,8 +23,8 @@ const stubConfig: SivConfig = {
   apiBase: "https://api.example.com/v1",
   model: "test-model",
   scansPath: "/tmp/siv-test/scans.jsonl",
-  findingsPath: "/tmp/siv-test/findings.jsonl",
-  promotionsPath: "/tmp/siv-test/promotions.jsonl",
+  insightsPath: "/tmp/siv-test/insights.jsonl",
+  rulesPath: "/tmp/siv-test/rules.jsonl",
   backupsDir: "/tmp/siv-test/backups",
   promotionThreshold: {
     minSessions: 3,
@@ -125,37 +125,37 @@ describe("callLLM", () => {
     const content =
       'Looking at this session transcript, I can see several patterns...\n\n' +
       'The agent made good use of parallel tool calls but missed some optimization opportunities.\n\n' +
-      '{"findings": [{"title": "test", "description": "test finding", "category": "pattern", "severity": "medium", "evidence": ["line 1"]}]}';
+      '{"insights": [{"title": "test", "description": "test insight", "category": "pattern", "severity": "medium", "evidence": ["line 1"]}]}';
     mockCreate.mockResolvedValue({
       choices: [{ message: { content } }],
       usage: { prompt_tokens: 100, completion_tokens: 50 },
     });
 
-    const res = await callLLM<{ findings: unknown[] }>(stubConfig, "system", "user");
-    expect(res.result.findings).toHaveLength(1);
-    expect(res.result.findings[0]).toMatchObject({ title: "test" });
+    const res = await callLLM<{ insights: unknown[] }>(stubConfig, "system", "user");
+    expect(res.result.insights).toHaveLength(1);
+    expect(res.result.insights[0]).toMatchObject({ title: "test" });
   });
 
   // Failure mode 2: Reasoning model emits doubled/nested markdown fences
   it("extracts JSON from doubled markdown fences", async () => {
     const content =
       '```json\n```\n' +
-      '{"findings": [{"title": "test", "description": "test finding"}]}\n' +
+      '{"insights": [{"title": "test", "description": "test insight"}]}\n' +
       '```\n```';
     mockCreate.mockResolvedValue({
       choices: [{ message: { content } }],
       usage: { prompt_tokens: 100, completion_tokens: 50 },
     });
 
-    const res = await callLLM<{ findings: unknown[] }>(stubConfig, "system", "user");
-    expect(res.result.findings).toHaveLength(1);
+    const res = await callLLM<{ insights: unknown[] }>(stubConfig, "system", "user");
+    expect(res.result.insights).toHaveLength(1);
   });
 
   // Failure mode 2 variant: trailing reasoning after closing fence
   it("extracts JSON when trailing text follows closing fence", async () => {
     const content =
       '```json\n' +
-      '{"findings": [{"title": "test", "description": "test finding"}]}\n' +
+      '{"insights": [{"title": "test", "description": "test insight"}]}\n' +
       '```\n\n' +
       'Some additional reasoning about the analysis...';
     mockCreate.mockResolvedValue({
@@ -163,8 +163,8 @@ describe("callLLM", () => {
       usage: { prompt_tokens: 100, completion_tokens: 50 },
     });
 
-    const res = await callLLM<{ findings: unknown[] }>(stubConfig, "system", "user");
-    expect(res.result.findings).toHaveLength(1);
+    const res = await callLLM<{ insights: unknown[] }>(stubConfig, "system", "user");
+    expect(res.result.insights).toHaveLength(1);
   });
 });
 

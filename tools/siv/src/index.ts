@@ -11,15 +11,15 @@ program
 
 program
   .command("log")
-  .description("Log a new finding")
-  .requiredOption("-c, --category <category>", "Finding category (correction, error, knowledge_gap, best_practice, feature_request)")
-  .requiredOption("-s, --summary <summary>", "Short summary of the finding")
+  .description("Log a new insight")
+  .requiredOption("-c, --category <category>", "Insight category (correction, error, knowledge_gap, best_practice, feature_request)")
+  .requiredOption("-s, --summary <summary>", "Short summary of the insight")
   .option("-d, --details <details>", "Detailed description")
   .option("-p, --priority <priority>", "Priority level (low, medium, high, critical)", "medium")
   .option("--project <project>", "Project name")
   .option("--project-path <path>", "Project path")
   .option("--session <session>", "Session identifier")
-  .option("--source <source>", "Finding source (analyze, manual, hook)", "manual")
+  .option("--source <source>", "Insight source (analyze, manual, hook)", "manual")
   .option("--tags <tags>", "Comma-separated tags")
   .option("--related <related>", "Comma-separated related file paths")
   .action((opts) => {
@@ -57,9 +57,9 @@ program
 
 program
   .command("retrieve")
-  .description("Get promoted learnings for context injection")
+  .description("Get consolidated rules for context injection")
   .option("--project-path <path>", "Project path")
-  .option("--global", "Include global learnings")
+  .option("--global", "Include global rules")
   .option("--format <format>", "Output format (text|json)", "text")
   .action(async (options) => {
     const { executeRetrieve } = await import("./commands/retrieve.js");
@@ -72,18 +72,18 @@ program
   });
 
 program
-  .command("promote_finding")
-  .description("Promote a finding to memory")
-  .requiredOption("--finding-ids <ids>", "Comma-separated finding IDs")
+  .command("consolidate")
+  .description("Consolidate insights into a rule")
+  .requiredOption("--insight-ids <ids>", "Comma-separated insight IDs")
   .requiredOption("--scope <scope>", "project|global")
   .option("--project <name>", "Project name")
   .option("--project-path <path>", "Project path")
   .requiredOption("--category <category>", "learning|error|preference")
   .requiredOption("--rule <rule>", "The distilled rule text")
   .action(async (options) => {
-    const { executePromoteFinding } = await import("./commands/promote-finding.js");
-    const result = await executePromoteFinding({
-      findingIds: options.findingIds.split(",").map((s: string) => s.trim()),
+    const { executeConsolidate } = await import("./commands/consolidate.js");
+    const result = await executeConsolidate({
+      insightIds: options.insightIds.split(",").map((s: string) => s.trim()),
       scope: options.scope,
       project: options.project,
       projectPath: options.projectPath,
@@ -95,7 +95,7 @@ program
 
 program
   .command("status")
-  .description("Show finding and promotion statistics")
+  .description("Show insight and rule statistics")
   .option("--project-path <path>", "Filter by project path")
   .action(async (options) => {
     const { executeStatus } = await import("./commands/status.js");
@@ -115,8 +115,8 @@ program
 
 program
   .command("group")
-  .description("Semantically group similar findings using LLM")
-  .option("--dry-run", "Show groups without updating findings.jsonl")
+  .description("Semantically group similar insights using LLM")
+  .option("--dry-run", "Show groups without updating insights.jsonl")
   .option("--reset", "Clear existing group labels before re-grouping")
   .option("-y, --yes", "Skip confirmation prompts")
   .action(async (options) => {
@@ -129,15 +129,15 @@ program
   });
 
 program
-  .command("run_promotion")
-  .description("Scan findings and promote patterns to memory")
-  .option("--dry-run", "Show what would be promoted without doing it")
-  .option("--reset", "Reset all findings to pending and clear promotions before running")
+  .command("run")
+  .description("Scan insights and consolidate patterns into rules")
+  .option("--dry-run", "Show what would be consolidated without doing it")
+  .option("--reset", "Reset all insights to pending and clear rules before running")
   .option("-y, --yes", "Skip confirmation prompts")
   .option("--window <days>", "Days to look back", "3")
   .action(async (options) => {
-    const { executeRunPromotion } = await import("./commands/run-promotion.js");
-    await executeRunPromotion({
+    const { executeRun } = await import("./commands/run.js");
+    await executeRun({
       dryRun: options.dryRun || false,
       reset: options.reset || false,
       yes: options.yes || false,

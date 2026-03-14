@@ -1,24 +1,24 @@
 /**
- * Run promotion: group findings semantically, distill into rules,
- * and promote to promotions.jsonl.
+ * Run: group insights semantically, distill into rules,
+ * and consolidate to rules.jsonl.
  */
 
 import fs from "fs";
 import readline from "readline";
 import { loadConfig } from "../config.js";
-import { readJsonl, updateFindingStatus } from "../storage.js";
-import { callLLM, getPromoteConfig } from "../llm.js";
+import { readJsonl, updateInsightStatus } from "../storage.js";
+import { callLLM, getConsolidateConfig } from "../llm.js";
 import {
   buildDistillPrompt,
-  type FindingGroup,
+  type InsightGroup,
   type DistillOutput,
 } from "../prompts/distill.js";
-import { executePromoteFinding } from "./promote-finding.js";
+import { executeConsolidate } from "./consolidate.js";
 import { executeGroup } from "./group.js";
-import { scoreFinding } from "../scoring.js";
-import type { Finding } from "../types.js";
+import { scoreInsight } from "../scoring.js";
+import type { Insight } from "../types.js";
 
-export interface RunPromotionOptions {
+export interface RunOptions {
   dryRun?: boolean;
   reset?: boolean;
   yes?: boolean;
@@ -39,26 +39,26 @@ function confirm(message: string): Promise<boolean> {
 }
 
 /**
- * Reset all findings to pending and clear promotions.jsonl.
+ * Reset all insights to pending and clear rules.jsonl.
  */
-export async function resetPromotions(
+export async function resetRules(
   skipConfirm?: boolean,
   homeDir?: string
 ): Promise<boolean> {
   const config = loadConfig(homeDir);
 
-  const allFindings = readJsonl<Finding>(config.findingsPath);
-  const promotedIds = allFindings
-    .filter((f) => f.status === "promoted")
+  const allInsights = readJsonl<Insight>(config.insightsPath);
+  const consolidatedIds = allInsights
+    .filter((f) => f.status === "consolidated")
     .map((f) => f.id);
 
-  const promotionCount = fs.existsSync(config.promotionsPath)
-    ? readJsonl(config.promotionsPath).length
+  const ruleCount = fs.existsSync(config.rulesPath)
+    ? readJsonl(config.rulesPath).length
     : 0;
 
   console.log(`This will:`);
-  console.log(`  - Reset ${promotedIds.length} findings from "promoted" → "pending"`);
-  console.log(`  - Delete ${promotionCount} promotions from promotions.jsonl`);
+  console.log(`  - Reset ${consolidatedIds.length} insights from "consolidated" to "pending"`);
+  console.log(`  - Delete ${ruleCount} rules from rules.jsonl`);
 
   if (!skipConfirm) {
     const ok = await confirm("Continue?");
@@ -68,12 +68,12 @@ export async function resetPromotions(
     }
   }
 
-  if (promotedIds.length > 0) {
-    updateFindingStatus(config.findingsPath, promotedIds, "pending");
+  if (consolidatedIds.length > 0) {
+    updateInsightStatus(config.insightsPath, consolidatedIds, "pending");
   }
 
-  if (fs.existsSync(config.promotionsPath)) {
-    fs.unlinkSync(config.promotionsPath);
+  if (fs.existsSync(config.rulesPath)) {
+    fs.unlinkSync(config.rulesPath);
   }
 
   console.log("Reset complete.");
@@ -81,24 +81,24 @@ export async function resetPromotions(
 }
 
 /**
- * Build FindingGroups from the semantic `group` field on findings.
+ * Build InsightGroups from the semantic `group` field on insights.
  *
- * Only includes groups with 2+ pending findings within the time window.
+ * Only includes groups with 2+ pending insights within the time window.
  */
-export function buildGroupsFromFindings(
-  findings: Finding[],
+export function buildGroupsFromInsights(
+  insights: Insight[],
   minSize: number = 2
-): FindingGroup[] {
-  const map = new Map<string, Finding[]>();
+): InsightGroup[] {
+  const map = new Map<string, Insight[]>();
 
-  for (const f of findings) {
+  for (const f of insights) {
     if (!f.group) continue;
     const arr = map.get(f.group) ?? [];
     arr.push(f);
     map.set(f.group, arr);
   }
 
-  const groups: FindingGroup[] = [];
+  const groups: InsightGroup[] = [];
   let groupId = 1;
 
   for (const [, items] of map) {
@@ -110,7 +110,7 @@ export function buildGroupsFromFindings(
       project_path: first.project_path,
       scope: "project",
       category: first.category,
-      findings: items.map((f) => ({
+      insights: items.map((f) => ({
         id: f.id,
         summary: f.summary,
         details: f.details,
@@ -123,53 +123,53 @@ export function buildGroupsFromFindings(
 }
 
 /**
- * Execute the run_promotion command.
+ * Execute the run command.
  *
  * Flow:
  * 1. Reset if requested
- * 2. Read findings, filter pending within window
- * 3. Run semantic grouping if any findings lack a group field
- * 4. Build groups from the `group` field, filter to 2+ findings
+ * 2. Read insights, filter pending within window
+ * 3. Run semantic grouping if any insights lack a group field
+ * 4. Build groups from the `group` field, filter to 2+ insights
  * 5. Dry run: print candidates and return
  * 6. Distill each group into a rule via LLM
- * 7. Promote each distilled rule via executePromoteFinding
+ * 7. Consolidate each distilled rule via executeConsolidate
  * 8. Print summary
  */
-export async function executeRunPromotion(
-  options: RunPromotionOptions = {},
+export async function executeRun(
+  options: RunOptions = {},
   homeDir?: string
 ): Promise<void> {
   // 1. Reset if requested
   if (options.reset) {
-    const ok = await resetPromotions(options.yes, homeDir);
+    const ok = await resetRules(options.yes, homeDir);
     if (!ok) return;
   }
 
   const config = loadConfig(homeDir);
   const windowDays = options.window ?? 3;
 
-  // 2. Read and filter findings
-  const allFindings = readJsonl<Finding>(config.findingsPath);
+  // 2. Read and filter insights
+  const allInsights = readJsonl<Insight>(config.insightsPath);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - windowDays);
   const cutoffIso = cutoff.toISOString();
 
-  const pending = allFindings.filter(
+  const pending = allInsights.filter(
     (f) => f.status === "pending" && f.ts >= cutoffIso
   );
 
   if (pending.length === 0) {
-    console.log("Nothing to promote.");
+    console.log("Nothing to consolidate.");
     return;
   }
 
-  // 3. Run semantic grouping if any pending findings lack a group field
+  // 3. Run semantic grouping if any pending insights lack a group field
   const ungrouped = pending.filter((f) => !f.group);
   if (ungrouped.length > 0) {
-    console.log(`Grouping ${ungrouped.length} ungrouped findings...`);
+    console.log(`Grouping ${ungrouped.length} ungrouped insights...`);
     await executeGroup({ yes: true }, homeDir);
-    // Re-read findings after grouping updated the file
-    const refreshed = readJsonl<Finding>(config.findingsPath);
+    // Re-read insights after grouping updated the file
+    const refreshed = readJsonl<Insight>(config.insightsPath);
     // Update pending array with fresh group values
     for (const p of pending) {
       const fresh = refreshed.find((f) => f.id === p.id);
@@ -180,24 +180,24 @@ export async function executeRunPromotion(
   }
 
   // 4. Build candidates from two paths:
-  //    Path A: semantic groups with 2+ findings
+  //    Path A: semantic groups with 2+ insights
   //    Path B: high-score singletons (score >= threshold)
-  const groupCandidates = buildGroupsFromFindings(pending);
+  const groupCandidates = buildGroupsFromInsights(pending);
 
   // Collect IDs already in group candidates
   const groupedIds = new Set<string>();
   for (const g of groupCandidates) {
-    for (const f of g.findings) {
+    for (const f of g.insights) {
       groupedIds.add(f.id);
     }
   }
 
   // Path B: high-score singletons
   let nextGroupId = groupCandidates.length + 1;
-  const scoreCandidates: FindingGroup[] = [];
+  const scoreCandidates: InsightGroup[] = [];
   for (const f of pending) {
     if (groupedIds.has(f.id)) continue;
-    const score = scoreFinding(f.category, f.priority);
+    const score = scoreInsight(f.category, f.priority);
     if (score >= config.promotionScoreThreshold) {
       scoreCandidates.push({
         group_id: nextGroupId++,
@@ -205,7 +205,7 @@ export async function executeRunPromotion(
         project_path: f.project_path,
         scope: "project",
         category: f.category,
-        findings: [{
+        insights: [{
           id: f.id,
           summary: f.summary,
           details: f.details,
@@ -218,45 +218,45 @@ export async function executeRunPromotion(
   const candidates = [...groupCandidates, ...scoreCandidates];
 
   if (candidates.length === 0) {
-    console.log("Nothing to promote.");
+    console.log("Nothing to consolidate.");
     return;
   }
 
   // 5. Dry run
   if (options.dryRun) {
-    console.log("Candidates for promotion:");
+    console.log("Candidates for consolidation:");
     for (const g of groupCandidates) {
-      const groupKey = pending.find((f) => f.id === g.findings[0].id)?.group ?? "?";
-      console.log(`  [group: ${groupKey}] ${g.findings.length} findings`);
-      for (const f of g.findings) {
+      const groupKey = pending.find((f) => f.id === g.insights[0].id)?.group ?? "?";
+      console.log(`  [group: ${groupKey}] ${g.insights.length} insights`);
+      for (const f of g.insights) {
         console.log(`    - ${f.id}: ${f.summary}`);
       }
     }
     for (const g of scoreCandidates) {
-      const f = g.findings[0];
-      const finding = pending.find((p) => p.id === f.id)!;
-      const score = scoreFinding(finding.category, finding.priority);
-      console.log(`  [score: ${score}] ${f.id} (${finding.category}/${finding.priority})`);
+      const f = g.insights[0];
+      const insight = pending.find((p) => p.id === f.id)!;
+      const score = scoreInsight(insight.category, insight.priority);
+      console.log(`  [score: ${score}] ${f.id} (${insight.category}/${insight.priority})`);
       console.log(`    ${f.summary}`);
     }
     return;
   }
 
-  // 6. Distill each group into a rule (using promote model if configured)
-  const promoteConfig = getPromoteConfig(config);
+  // 6. Distill each group into a rule (using consolidate model if configured)
+  const consolidateConfig = getConsolidateConfig(config);
   const { system, user } = buildDistillPrompt(candidates);
   const { result: distilled } = await callLLM<DistillOutput>(
-    promoteConfig,
+    consolidateConfig,
     system,
     user
   );
 
-  // 7. Promote each distilled rule (in parallel)
-  const promoteResults = await Promise.all(
-    distilled.promotions.map((p) =>
-      executePromoteFinding(
+  // 7. Consolidate each distilled rule (in parallel)
+  const consolidateResults = await Promise.all(
+    distilled.rules.map((p) =>
+      executeConsolidate(
         {
-          findingIds: p.finding_ids,
+          insightIds: p.insight_ids,
           scope: p.scope,
           project: p.project,
           projectPath: p.project_path,
@@ -264,22 +264,22 @@ export async function executeRunPromotion(
           rule: p.rule,
         },
         homeDir,
-        promoteConfig
-      ).then((result) => ({ result, promotion: p }))
+        consolidateConfig
+      ).then((result) => ({ result, rule: p }))
     )
   );
 
-  let promotedCount = 0;
-  for (const { result, promotion: p } of promoteResults) {
+  let consolidatedCount = 0;
+  for (const { result, rule: p } of consolidateResults) {
     if (result.action !== "skip") {
-      promotedCount++;
+      consolidatedCount++;
     }
     const rulePreview = p.rule.slice(0, 60) + (p.rule.length > 60 ? "..." : "");
-    console.log(`  [${result.action}] ${p.category} → ${rulePreview}`);
+    console.log(`  [${result.action}] ${p.category} -> ${rulePreview}`);
   }
 
   // 8. Summary
   console.log(
-    `\nPromotion complete: ${promotedCount} rules promoted from ${pending.length} findings.`
+    `\nConsolidation complete: ${consolidatedCount} rules consolidated from ${pending.length} insights.`
   );
 }

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { generateId, appendJsonl, readJsonl, updateFindingStatus } from "../src/storage.js";
+import { generateInsightId, appendJsonl, readJsonl, updateInsightStatus } from "../src/storage.js";
 
 describe("storage", () => {
   let tmpDir: string;
@@ -15,19 +15,14 @@ describe("storage", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  describe("generateId", () => {
-    it("generates LRN prefix for non-error categories", () => {
-      const id = generateId("correction");
-      expect(id).toMatch(/^LRN-\d{8}-[0-9a-f]{3}$/);
-    });
-
-    it("generates ERR prefix for error category", () => {
-      const id = generateId("error");
-      expect(id).toMatch(/^ERR-\d{8}-[0-9a-f]{3}$/);
+  describe("generateInsightId", () => {
+    it("generates INS prefix for all categories", () => {
+      const id = generateInsightId();
+      expect(id).toMatch(/^INS-\d{8}-[0-9a-f]{3}$/);
     });
 
     it("includes today's date", () => {
-      const id = generateId("best_practice");
+      const id = generateInsightId();
       const now = new Date();
       const expected =
         now.getFullYear().toString() +
@@ -40,7 +35,7 @@ describe("storage", () => {
   describe("appendJsonl / readJsonl", () => {
     it("roundtrips a single record", () => {
       const filePath = path.join(tmpDir, "test.jsonl");
-      const record = { id: "LRN-20260305-abc", summary: "test" };
+      const record = { id: "INS-20260305-abc", summary: "test" };
       appendJsonl(filePath, record);
 
       const results = readJsonl<typeof record>(filePath);
@@ -83,24 +78,24 @@ describe("storage", () => {
     });
   });
 
-  describe("updateFindingStatus", () => {
-    it("updates status of matching findings", () => {
-      const filePath = path.join(tmpDir, "findings.jsonl");
-      appendJsonl(filePath, { id: "LRN-001", status: "pending", summary: "a" });
-      appendJsonl(filePath, { id: "LRN-002", status: "pending", summary: "b" });
-      appendJsonl(filePath, { id: "LRN-003", status: "pending", summary: "c" });
+  describe("updateInsightStatus", () => {
+    it("updates status of matching insights", () => {
+      const filePath = path.join(tmpDir, "insights.jsonl");
+      appendJsonl(filePath, { id: "INS-001", status: "pending", summary: "a" });
+      appendJsonl(filePath, { id: "INS-002", status: "pending", summary: "b" });
+      appendJsonl(filePath, { id: "INS-003", status: "pending", summary: "c" });
 
-      updateFindingStatus(filePath, ["LRN-001", "LRN-003"], "promoted");
+      updateInsightStatus(filePath, ["INS-001", "INS-003"], "consolidated");
 
       const results = readJsonl<{ id: string; status: string }>(filePath);
-      expect(results[0].status).toBe("promoted");
+      expect(results[0].status).toBe("consolidated");
       expect(results[1].status).toBe("pending");
-      expect(results[2].status).toBe("promoted");
+      expect(results[2].status).toBe("consolidated");
     });
 
     it("does nothing for missing file", () => {
       // Should not throw
-      updateFindingStatus(path.join(tmpDir, "nope.jsonl"), ["id1"], "promoted");
+      updateInsightStatus(path.join(tmpDir, "nope.jsonl"), ["id1"], "consolidated");
     });
   });
 });

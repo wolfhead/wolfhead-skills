@@ -4,7 +4,7 @@ import path from "path";
 import os from "os";
 import { executeLog } from "../../src/commands/log.js";
 import { readJsonl } from "../../src/storage.js";
-import type { Finding } from "../../src/types.js";
+import type { Insight } from "../../src/types.js";
 
 describe("executeLog", () => {
   let tmpDir: string;
@@ -17,51 +17,51 @@ describe("executeLog", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("appends a finding to findings.jsonl", () => {
+  it("appends an insight to insights.jsonl", () => {
     const result = executeLog(
       {
         category: "correction",
-        summary: "Test finding",
+        summary: "Test insight",
         project: "test-project",
       },
       tmpDir
     );
 
     expect(result.status).toBe("logged");
-    expect(result.id).toMatch(/^LRN-/);
+    expect(result.id).toMatch(/^INS-/);
 
-    const findings = readJsonl<Finding>(path.join(tmpDir, ".siv", "findings.jsonl"));
-    expect(findings).toHaveLength(1);
-    expect(findings[0].summary).toBe("Test finding");
-    expect(findings[0].category).toBe("correction");
-    expect(findings[0].status).toBe("pending");
-    expect(findings[0].project).toBe("test-project");
+    const insights = readJsonl<Insight>(path.join(tmpDir, ".siv", "insights.jsonl"));
+    expect(insights).toHaveLength(1);
+    expect(insights[0].summary).toBe("Test insight");
+    expect(insights[0].category).toBe("correction");
+    expect(insights[0].status).toBe("pending");
+    expect(insights[0].project).toBe("test-project");
   });
 
-  it("generates ERR prefix for error category", () => {
+  it("generates INS prefix for all categories", () => {
     const result = executeLog(
       {
         category: "error",
-        summary: "An error finding",
+        summary: "An error insight",
       },
       tmpDir
     );
 
-    expect(result.id).toMatch(/^ERR-/);
+    expect(result.id).toMatch(/^INS-/);
   });
 
   it("parses comma-separated tags", () => {
     executeLog(
       {
         category: "best_practice",
-        summary: "Tagged finding",
+        summary: "Tagged insight",
         tags: "typescript, testing, ci",
       },
       tmpDir
     );
 
-    const findings = readJsonl<Finding>(path.join(tmpDir, ".siv", "findings.jsonl"));
-    expect(findings[0].tags).toEqual(["typescript", "testing", "ci"]);
+    const insights = readJsonl<Insight>(path.join(tmpDir, ".siv", "insights.jsonl"));
+    expect(insights[0].tags).toEqual(["typescript", "testing", "ci"]);
   });
 
   it("parses comma-separated related files", () => {
@@ -74,21 +74,21 @@ describe("executeLog", () => {
       tmpDir
     );
 
-    const findings = readJsonl<Finding>(path.join(tmpDir, ".siv", "findings.jsonl"));
-    expect(findings[0].related_files).toEqual(["src/index.ts", "src/config.ts"]);
+    const insights = readJsonl<Insight>(path.join(tmpDir, ".siv", "insights.jsonl"));
+    expect(insights[0].related_files).toEqual(["src/index.ts", "src/config.ts"]);
   });
 
   it("uses default values for optional fields", () => {
     executeLog(
       {
         category: "feature_request",
-        summary: "Minimal finding",
+        summary: "Minimal insight",
       },
       tmpDir
     );
 
-    const findings = readJsonl<Finding>(path.join(tmpDir, ".siv", "findings.jsonl"));
-    const f = findings[0];
+    const insights = readJsonl<Insight>(path.join(tmpDir, ".siv", "insights.jsonl"));
+    const f = insights[0];
     expect(f.priority).toBe("medium");
     expect(f.source).toBe("manual");
     expect(f.details).toBe("");

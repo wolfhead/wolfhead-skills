@@ -1,12 +1,12 @@
 /**
- * Status command: report finding and promotion statistics.
+ * Status command: report insight and rule statistics.
  *
  * Pure data reporting, no LLM calls.
  */
 
 import { loadConfig } from "../config.js";
 import { readJsonl } from "../storage.js";
-import type { Finding, Promotion } from "../types.js";
+import type { Insight, Rule } from "../types.js";
 
 export interface StatusOptions {
   projectPath?: string;
@@ -17,22 +17,22 @@ export interface StatusResult {
   byStatus: Record<string, number>;
   byCategory: Record<string, number>;
   byProject: Record<string, number>;
-  recentPromotions: Array<{ ts: string; project: string; rule: string }>;
+  recentRules: Array<{ ts: string; project: string; rule: string }>;
   pendingAge: { lt7: number; d7to14: number; d14to30: number; gt30: number };
 }
 
 /**
- * Compute status statistics from findings and promotions.
+ * Compute status statistics from insights and rules.
  */
 export function computeStatus(
-  findings: Finding[],
-  promotions: Promotion[],
+  insights: Insight[],
+  rules: Rule[],
   options: StatusOptions = {}
 ): StatusResult {
   // Filter by project path if specified
-  let filtered = findings;
+  let filtered = insights;
   if (options.projectPath) {
-    filtered = findings.filter((f) => f.project_path === options.projectPath);
+    filtered = insights.filter((f) => f.project_path === options.projectPath);
   }
 
   // By status
@@ -54,17 +54,17 @@ export function computeStatus(
     byProject[proj] = (byProject[proj] ?? 0) + 1;
   }
 
-  // Recent promotions (last 10)
-  let filteredPromotions = promotions;
+  // Recent rules (last 10)
+  let filteredRules = rules;
   if (options.projectPath) {
-    filteredPromotions = promotions.filter(
+    filteredRules = rules.filter(
       (p) => p.project_path === options.projectPath
     );
   }
-  const sorted = [...filteredPromotions].sort((a, b) =>
+  const sorted = [...filteredRules].sort((a, b) =>
     b.ts.localeCompare(a.ts)
   );
-  const recentPromotions = sorted.slice(0, 10).map((p) => ({
+  const recentRules = sorted.slice(0, 10).map((p) => ({
     ts: p.ts.slice(0, 10),
     project: p.project || "(unknown)",
     rule: p.rule,
@@ -91,7 +91,7 @@ export function computeStatus(
     byStatus,
     byCategory,
     byProject,
-    recentPromotions,
+    recentRules,
     pendingAge: { lt7, d7to14, d14to30, gt30 },
   };
 }
@@ -114,7 +114,7 @@ export function formatStatus(status: StatusResult): string {
   lines.push("siv status");
   lines.push("\u2500".repeat(25));
 
-  lines.push(`Findings: ${status.total} total`);
+  lines.push(`Insights: ${status.total} total`);
   if (Object.keys(status.byStatus).length > 0) {
     lines.push(`  ${formatPairs(status.byStatus)}`);
   }
@@ -136,15 +136,15 @@ export function formatStatus(status: StatusResult): string {
   }
 
   lines.push("");
-  if (status.recentPromotions.length > 0) {
-    lines.push(`Recent promotions (last ${status.recentPromotions.length}):`);
-    for (const p of status.recentPromotions) {
+  if (status.recentRules.length > 0) {
+    lines.push(`Recent rules (last ${status.recentRules.length}):`);
+    for (const p of status.recentRules) {
       const truncated =
         p.rule.length > 60 ? p.rule.slice(0, 57) + "..." : p.rule;
       lines.push(`  ${p.ts} | ${p.project} | "${truncated}"`);
     }
   } else {
-    lines.push("Recent promotions:");
+    lines.push("Recent rules:");
     lines.push("  (none)");
   }
 
@@ -165,8 +165,8 @@ export function executeStatus(
   homeDir?: string
 ): string {
   const config = loadConfig(homeDir);
-  const findings = readJsonl<Finding>(config.findingsPath);
-  const promotions = readJsonl<Promotion>(config.promotionsPath);
-  const status = computeStatus(findings, promotions, options);
+  const insights = readJsonl<Insight>(config.insightsPath);
+  const rules = readJsonl<Rule>(config.rulesPath);
+  const status = computeStatus(insights, rules, options);
   return formatStatus(status);
 }

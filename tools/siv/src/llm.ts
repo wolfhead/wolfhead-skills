@@ -7,14 +7,14 @@ export interface LLMResponse<T> {
   usage: { input_tokens: number; output_tokens: number };
 }
 
-/** Build a config with promote-model overrides applied (if set). */
-export function getPromoteConfig(config: SivConfig): SivConfig {
-  if (!config.promoteModel) return config;
+/** Build a config with consolidate-model overrides applied (if set). */
+export function getConsolidateConfig(config: SivConfig): SivConfig {
+  if (!config.consolidateModel) return config;
   return {
     ...config,
-    apiKey: config.promoteApiKey ?? config.apiKey,
-    apiBase: config.promoteApiBase ?? config.apiBase,
-    model: config.promoteModel,
+    apiKey: config.consolidateApiKey ?? config.apiKey,
+    apiBase: config.consolidateApiBase ?? config.apiBase,
+    model: config.consolidateModel,
   };
 }
 

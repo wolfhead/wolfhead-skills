@@ -1,16 +1,16 @@
-import type { Finding, FindingCategory, Priority, FindingSource } from "../types.js";
+import type { Insight, InsightCategory, Priority, InsightSource } from "../types.js";
 import { loadConfig } from "../config.js";
-import { generateId, appendJsonl } from "../storage.js";
+import { generateInsightId, appendJsonl } from "../storage.js";
 
 export interface LogOptions {
-  category: FindingCategory;
+  category: InsightCategory;
   summary: string;
   details?: string;
   priority?: Priority;
   project?: string;
   projectPath?: string;
   session?: string;
-  source?: FindingSource;
+  source?: InsightSource;
   tags?: string;
   related?: string;
 }
@@ -22,7 +22,7 @@ export interface LogResult {
 
 export function executeLog(options: LogOptions, homeDir?: string): LogResult {
   const config = loadConfig(homeDir);
-  const id = generateId(options.category);
+  const id = generateInsightId();
 
   const tags = options.tags
     ? options.tags.split(",").map((t) => t.trim()).filter(Boolean)
@@ -32,7 +32,7 @@ export function executeLog(options: LogOptions, homeDir?: string): LogResult {
     ? options.related.split(",").map((f) => f.trim()).filter(Boolean)
     : [];
 
-  const finding: Finding = {
+  const insight: Insight = {
     id,
     ts: new Date().toISOString(),
     category: options.category,
@@ -48,7 +48,7 @@ export function executeLog(options: LogOptions, homeDir?: string): LogResult {
     status: "pending",
   };
 
-  appendJsonl(config.findingsPath, finding as unknown as Record<string, unknown>);
+  appendJsonl(config.insightsPath, insight as unknown as Record<string, unknown>);
 
   return { id, status: "logged" };
 }

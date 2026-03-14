@@ -8,13 +8,13 @@ export interface SivConfig {
   apiKey: string;
   apiBase: string;
   model: string;
-  // Optional: separate model for promotion (group + distill + promote steps)
-  promoteApiKey?: string;
-  promoteApiBase?: string;
-  promoteModel?: string;
+  // Optional: separate model for consolidation (group + distill + consolidate steps)
+  consolidateApiKey?: string;
+  consolidateApiBase?: string;
+  consolidateModel?: string;
   scansPath: string;
-  findingsPath: string;
-  promotionsPath: string;
+  insightsPath: string;
+  rulesPath: string;
   backupsDir: string;
   promotionThreshold: {
     minSessions: number;
@@ -45,12 +45,12 @@ export function loadConfig(homeDir?: string): SivConfig {
     apiKey: envVars.SIV_API_KEY ?? "",
     apiBase: envVars.SIV_API_BASE ?? "https://api.deepseek.com/v1",
     model: envVars.SIV_MODEL ?? "deepseek-chat",
-    promoteApiKey: envVars.SIV_PROMOTE_API_KEY,
-    promoteApiBase: envVars.SIV_PROMOTE_API_BASE,
-    promoteModel: envVars.SIV_PROMOTE_MODEL,
+    consolidateApiKey: envVars.SIV_CONSOLIDATE_API_KEY,
+    consolidateApiBase: envVars.SIV_CONSOLIDATE_API_BASE,
+    consolidateModel: envVars.SIV_CONSOLIDATE_MODEL,
     scansPath: path.join(sivDir, "scans.jsonl"),
-    findingsPath: path.join(sivDir, "findings.jsonl"),
-    promotionsPath: path.join(sivDir, "promotions.jsonl"),
+    insightsPath: path.join(sivDir, "insights.jsonl"),
+    rulesPath: path.join(sivDir, "rules.jsonl"),
     backupsDir: path.join(sivDir, "backups"),
     promotionThreshold: {
       minSessions: 2,

@@ -28,8 +28,8 @@ describe("config", () => {
       expect(config.apiKey).toBe("");
       expect(config.apiBase).toBe("https://api.deepseek.com/v1");
       expect(config.model).toBe("deepseek-chat");
-      expect(config.findingsPath).toBe(path.join(tmpDir, ".siv", "findings.jsonl"));
-      expect(config.promotionsPath).toBe(path.join(tmpDir, ".siv", "promotions.jsonl"));
+      expect(config.insightsPath).toBe(path.join(tmpDir, ".siv", "insights.jsonl"));
+      expect(config.rulesPath).toBe(path.join(tmpDir, ".siv", "rules.jsonl"));
       expect(config.backupsDir).toBe(path.join(tmpDir, ".siv", "backups"));
     });
 

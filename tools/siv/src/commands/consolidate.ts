@@ -1,9 +1,9 @@
 /**
- * Promote a finding to promotions.jsonl.
+ * Consolidate insights into rules.jsonl.
  *
  * Uses an LLM to decide how to integrate the rule (create, merge,
- * supersede, or skip) against existing promotions, then writes to
- * promotions.jsonl as the sole storage.
+ * supersede, or skip) against existing rules, then writes to
+ * rules.jsonl as the sole storage.
  */
 
 import { loadConfig, type SivConfig } from "../config.js";
@@ -11,18 +11,18 @@ import { callLLM } from "../llm.js";
 import {
   appendJsonl,
   readJsonl,
-  updateFindingStatus,
-  updatePromotionStatus,
-  generatePromotionId,
+  updateInsightStatus,
+  updateRuleStatus,
+  generateRuleId,
 } from "../storage.js";
 import {
-  buildPromotePrompt,
-  type PromoteWriterOutput,
-} from "../prompts/promote.js";
-import type { Promotion } from "../types.js";
+  buildConsolidatePrompt,
+  type ConsolidateWriterOutput,
+} from "../prompts/consolidate.js";
+import type { Rule } from "../types.js";
 
-export interface PromoteFindingOptions {
-  findingIds: string[];
+export interface ConsolidateOptions {
+  insightIds: string[];
   scope: "project" | "global";
   project?: string;
   projectPath?: string;
@@ -30,33 +30,33 @@ export interface PromoteFindingOptions {
   rule: string;
 }
 
-export interface PromoteFindingResult {
+export interface ConsolidateResult {
   action: string;
   entry: string;
   reason: string;
-  finding_ids: string[];
+  insight_ids: string[];
 }
 
 /**
- * Execute the promote_finding command.
+ * Execute the consolidate command.
  *
  * Flow:
- * 1. Read existing active promotions from promotions.jsonl
- * 2. Call LLM with promote prompt
- * 3. Write result to promotions.jsonl (handling merge/supersede)
- * 4. Mark source findings as promoted
+ * 1. Read existing active rules from rules.jsonl
+ * 2. Call LLM with consolidate prompt
+ * 3. Write result to rules.jsonl (handling merge/supersede)
+ * 4. Mark source insights as consolidated
  * 5. Return result
  */
-export async function executePromoteFinding(
-  options: PromoteFindingOptions,
+export async function executeConsolidate(
+  options: ConsolidateOptions,
   homeDir?: string,
   configOverride?: SivConfig
-): Promise<PromoteFindingResult> {
+): Promise<ConsolidateResult> {
   const config = configOverride ?? loadConfig(homeDir);
 
-  // 1. Read existing active promotions for same project/scope
-  const allPromotions = readJsonl<Promotion>(config.promotionsPath);
-  const existingActive = allPromotions.filter((p) => {
+  // 1. Read existing active rules for same project/scope
+  const allRules = readJsonl<Rule>(config.rulesPath);
+  const existingActive = allRules.filter((p) => {
     if (p.status !== "active") return false;
     if (options.scope === "project") {
       return p.scope === "project" && p.project_path === (options.projectPath ?? "");
@@ -65,21 +65,21 @@ export async function executePromoteFinding(
   });
 
   // 2. Call LLM
-  const { system, user } = buildPromotePrompt({
+  const { system, user } = buildConsolidatePrompt({
     rule: options.rule,
     category: options.category,
     scope: options.scope,
-    existingPromotions: existingActive.map((p) => ({
+    existingRules: existingActive.map((p) => ({
       id: p.id,
       rule: p.rule,
       category: p.category,
-      finding_ids: p.finding_ids,
+      insight_ids: p.insight_ids,
       ts: p.ts,
     })),
-    findingIds: options.findingIds,
+    insightIds: options.insightIds,
   });
 
-  const { result: writerOutput } = await callLLM<PromoteWriterOutput>(
+  const { result: writerOutput } = await callLLM<ConsolidateWriterOutput>(
     config,
     system,
     user
@@ -91,28 +91,28 @@ export async function executePromoteFinding(
       action: "skip",
       entry: "",
       reason: writerOutput.reason,
-      finding_ids: options.findingIds,
+      insight_ids: options.insightIds,
     };
   }
 
-  // For merge/supersede, mark old promotions as superseded
+  // For merge/supersede, mark old rules as superseded
   if (
     (writerOutput.action === "merge" || writerOutput.action === "supersede") &&
     writerOutput.supersedes_ids &&
     writerOutput.supersedes_ids.length > 0
   ) {
-    updatePromotionStatus(
-      config.promotionsPath,
+    updateRuleStatus(
+      config.rulesPath,
       writerOutput.supersedes_ids,
       "superseded"
     );
   }
 
-  // Append new active promotion
-  const promotion: Promotion = {
-    id: generatePromotionId(),
+  // Append new active rule
+  const rule: Rule = {
+    id: generateRuleId(),
     ts: new Date().toISOString(),
-    finding_ids: options.findingIds,
+    insight_ids: options.insightIds,
     scope: options.scope,
     project: options.project ?? "",
     project_path: options.projectPath ?? "",
@@ -121,13 +121,13 @@ export async function executePromoteFinding(
     action_taken: writerOutput.action,
     status: "active",
   };
-  appendJsonl(config.promotionsPath, promotion as unknown as Record<string, unknown>);
+  appendJsonl(config.rulesPath, rule as unknown as Record<string, unknown>);
 
-  // 4. Mark source findings as promoted
-  updateFindingStatus(
-    config.findingsPath,
-    options.findingIds,
-    "promoted"
+  // 4. Mark source insights as consolidated
+  updateInsightStatus(
+    config.insightsPath,
+    options.insightIds,
+    "consolidated"
   );
 
   // 5. Return result
@@ -135,6 +135,6 @@ export async function executePromoteFinding(
     action: writerOutput.action,
     entry: writerOutput.entry ?? "",
     reason: writerOutput.reason,
-    finding_ids: options.findingIds,
+    insight_ids: options.insightIds,
   };
 }

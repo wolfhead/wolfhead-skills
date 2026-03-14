@@ -1,8 +1,8 @@
 /**
- * Analyze command: runs LLM analysis on session transcripts to extract findings.
+ * Analyze command: runs LLM analysis on session transcripts to extract insights.
  *
  * For each session, extracts condensed data, sends to LLM for analysis,
- * and logs each finding via executeLog. Large sessions are split into
+ * and logs each insight via executeLog. Large sessions are split into
  * chunks at human_message boundaries and analyzed in a loop.
  */
 
@@ -18,7 +18,7 @@ import { callLLM } from "../llm.js";
 import { executeLog } from "./log.js";
 import { appendJsonl, readJsonl } from "../storage.js";
 import { buildAnalyzePrompt } from "../prompts/analyze.js";
-import type { FindingCategory, Priority } from "../types.js";
+import type { InsightCategory, Priority } from "../types.js";
 
 export interface AnalyzeOptions {
   latest?: number;
@@ -27,7 +27,7 @@ export interface AnalyzeOptions {
   session?: string;
 }
 
-interface AnalyzeFinding {
+interface AnalyzeInsight {
   category: string;
   summary: string;
   details: string;
@@ -36,7 +36,7 @@ interface AnalyzeFinding {
 }
 
 interface AnalyzeResponse {
-  findings: AnalyzeFinding[];
+  insights: AnalyzeInsight[];
 }
 
 interface ScanRecord {
@@ -47,7 +47,7 @@ interface ScanRecord {
   line_count: number;
   project: string;
   project_path: string;
-  findings_count: number;
+  insights_count: number;
   chunks?: number;
   status: "ok" | "error" | "skipped";
   error?: string;
@@ -117,7 +117,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
     return;
   }
 
-  let totalFindings = 0;
+  let totalInsights = 0;
   let sessionsAnalyzed = 0;
 
   for (const session of newSessions) {
@@ -130,7 +130,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
         line_count: lines,
         project: "",
         project_path: "",
-        findings_count: 0,
+        insights_count: 0,
         status: "skipped",
         error: `too short (${lines} lines)`,
       });
@@ -147,7 +147,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
         line_count: countLines(session.path),
         project: "",
         project_path: "",
-        findings_count: 0,
+        insights_count: 0,
         status: "skipped",
         error: "not a main session",
       });
@@ -159,29 +159,29 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
     const projectPath = extraction.metadata.cwd ?? "";
 
     try {
-      const findings = await analyzeExtraction(config, extraction);
+      const insights = await analyzeExtraction(config, extraction);
 
-      for (const finding of findings) {
-        const category = VALID_CATEGORIES.has(finding.category)
-          ? (finding.category as FindingCategory)
+      for (const insight of insights) {
+        const category = VALID_CATEGORIES.has(insight.category)
+          ? (insight.category as InsightCategory)
           : "best_practice";
-        const priority = VALID_PRIORITIES.has(finding.priority)
-          ? (finding.priority as Priority)
+        const priority = VALID_PRIORITIES.has(insight.priority)
+          ? (insight.priority as Priority)
           : "medium";
 
         executeLog({
           category,
-          summary: finding.summary,
-          details: finding.details || "",
+          summary: insight.summary,
+          details: insight.details || "",
           priority,
           project,
           projectPath,
           session: session.session_id,
           source: "analyze",
-          tags: Array.isArray(finding.tags) ? finding.tags.join(", ") : "",
+          tags: Array.isArray(insight.tags) ? insight.tags.join(", ") : "",
         });
 
-        totalFindings++;
+        totalInsights++;
       }
 
       const chunks = chunkConversation(extraction).length;
@@ -192,7 +192,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
         line_count: countLines(session.path),
         project,
         project_path: projectPath,
-        findings_count: findings.length,
+        insights_count: insights.length,
         chunks: chunks > 1 ? chunks : undefined,
         status: "ok",
       });
@@ -200,7 +200,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
       sessionsAnalyzed++;
       const chunkNote = chunks > 1 ? ` (${chunks} chunks)` : "";
       console.log(
-        `Analyzed ${session.session_id}: ${findings.length} finding(s)${chunkNote}`
+        `Analyzed ${session.session_id}: ${insights.length} insight(s)${chunkNote}`
       );
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -211,7 +211,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
         line_count: countLines(session.path),
         project,
         project_path: projectPath,
-        findings_count: 0,
+        insights_count: 0,
         status: "error",
         error: errMsg,
       });
@@ -220,7 +220,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
   }
 
   console.log(
-    `\nDone. Analyzed ${sessionsAnalyzed} session(s), logged ${totalFindings} finding(s).`
+    `\nDone. Analyzed ${sessionsAnalyzed} session(s), logged ${totalInsights} insight(s).`
   );
 }
 
@@ -232,7 +232,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
 async function analyzeExtraction(
   config: SivConfig,
   extraction: SessionExtraction
-): Promise<AnalyzeFinding[]> {
+): Promise<AnalyzeInsight[]> {
   const fullJson = JSON.stringify(extraction);
 
   // Small enough for one call
@@ -242,7 +242,7 @@ async function analyzeExtraction(
 
   // Split into chunks
   const chunks = chunkConversation(extraction);
-  const allFindings: AnalyzeFinding[] = [];
+  const allInsights: AnalyzeInsight[] = [];
 
   for (let i = 0; i < chunks.length; i++) {
     const chunkExtraction: SessionExtraction = {
@@ -256,17 +256,17 @@ async function analyzeExtraction(
     };
 
     const chunkJson = JSON.stringify(chunkExtraction);
-    const findings = await callAnalyze(config, chunkJson);
-    allFindings.push(...findings);
+    const insights = await callAnalyze(config, chunkJson);
+    allInsights.push(...insights);
   }
 
-  return allFindings;
+  return allInsights;
 }
 
 async function callAnalyze(
   config: SivConfig,
   condensedJson: string
-): Promise<AnalyzeFinding[]> {
+): Promise<AnalyzeInsight[]> {
   const prompt = buildAnalyzePrompt(condensedJson);
   const llmResult = await callLLM<AnalyzeResponse>(
     config,
@@ -275,10 +275,10 @@ async function callAnalyze(
   );
 
   const response = llmResult.result;
-  if (!response.findings || !Array.isArray(response.findings)) {
+  if (!response.insights || !Array.isArray(response.insights)) {
     return [];
   }
-  return response.findings;
+  return response.insights;
 }
 
 /**

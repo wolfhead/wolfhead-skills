@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { executePromoteFinding } from "../../src/commands/promote-finding.js";
-import { buildPromotePrompt, type PromoteWriterOutput } from "../../src/prompts/promote.js";
+import { executeConsolidate } from "../../src/commands/consolidate.js";
+import { buildConsolidatePrompt, type ConsolidateWriterOutput } from "../../src/prompts/consolidate.js";
 
 vi.mock("../../src/llm.js", () => ({
   callLLM: vi.fn(),
@@ -19,14 +19,14 @@ import { loadConfig } from "../../src/config.js";
 const mockedCallLLM = vi.mocked(callLLM);
 const mockedLoadConfig = vi.mocked(loadConfig);
 
-describe("buildPromotePrompt", () => {
+describe("buildConsolidatePrompt", () => {
   it("includes correct and incorrect examples in system prompt", () => {
-    const { system } = buildPromotePrompt({
+    const { system } = buildConsolidatePrompt({
       rule: "test rule",
       category: "learning",
       scope: "project",
-      existingPromotions: [],
-      findingIds: ["LRN-001"],
+      existingRules: [],
+      insightIds: ["INS-001"],
     });
 
     expect(system).toContain("<example>");
@@ -35,11 +35,11 @@ describe("buildPromotePrompt", () => {
   });
 });
 
-describe("executePromoteFinding", () => {
+describe("executeConsolidate", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "siv-promote-exec-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "siv-consolidate-exec-"));
 
     const sivDir = path.join(tmpDir, ".siv");
     fs.mkdirSync(sivDir, { recursive: true });
@@ -49,8 +49,8 @@ describe("executePromoteFinding", () => {
       apiKey: "test-key",
       apiBase: "https://api.test.com",
       model: "test-model",
-      findingsPath: path.join(sivDir, "findings.jsonl"),
-      promotionsPath: path.join(sivDir, "promotions.jsonl"),
+      insightsPath: path.join(sivDir, "insights.jsonl"),
+      rulesPath: path.join(sivDir, "rules.jsonl"),
       backupsDir: path.join(sivDir, "backups"),
       promotionThreshold: {
         minSessions: 3,
@@ -65,12 +65,12 @@ describe("executePromoteFinding", () => {
     vi.restoreAllMocks();
   });
 
-  it("create: appends to promotions.jsonl and marks findings promoted", async () => {
+  it("create: appends to rules.jsonl and marks insights consolidated", async () => {
     const sivDir = path.join(tmpDir, ".siv");
-    const findingsPath = path.join(sivDir, "findings.jsonl");
+    const insightsPath = path.join(sivDir, "insights.jsonl");
     fs.writeFileSync(
-      findingsPath,
-      JSON.stringify({ id: "LRN-20260305-abc", status: "pending" }) + "\n",
+      insightsPath,
+      JSON.stringify({ id: "INS-20260305-abc", status: "pending" }) + "\n",
       "utf-8"
     );
 
@@ -79,13 +79,13 @@ describe("executePromoteFinding", () => {
         action: "create",
         entry: "Always read before write",
         reason: "new learning",
-      } satisfies PromoteWriterOutput,
+      } satisfies ConsolidateWriterOutput,
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    const result = await executePromoteFinding(
+    const result = await executeConsolidate(
       {
-        findingIds: ["LRN-20260305-abc"],
+        insightIds: ["INS-20260305-abc"],
         scope: "project",
         project: "project",
         projectPath: "/Users/me/work/project",
@@ -96,30 +96,30 @@ describe("executePromoteFinding", () => {
     );
 
     expect(result.action).toBe("create");
-    expect(result.finding_ids).toEqual(["LRN-20260305-abc"]);
+    expect(result.insight_ids).toEqual(["INS-20260305-abc"]);
     expect(result.entry).toBe("Always read before write");
 
-    // Verify promotion was appended to promotions.jsonl
-    const promotionsPath = path.join(sivDir, "promotions.jsonl");
-    expect(fs.existsSync(promotionsPath)).toBe(true);
-    const promotionLine = fs.readFileSync(promotionsPath, "utf-8").trim();
-    const promotion = JSON.parse(promotionLine);
-    expect(promotion.action_taken).toBe("create");
-    expect(promotion.status).toBe("active");
-    expect(promotion.id).toMatch(/^PRM-/);
-    expect(promotion.scope).toBe("project");
+    // Verify rule was appended to rules.jsonl
+    const rulesPath = path.join(sivDir, "rules.jsonl");
+    expect(fs.existsSync(rulesPath)).toBe(true);
+    const ruleLine = fs.readFileSync(rulesPath, "utf-8").trim();
+    const rule = JSON.parse(ruleLine);
+    expect(rule.action_taken).toBe("create");
+    expect(rule.status).toBe("active");
+    expect(rule.id).toMatch(/^RUL-/);
+    expect(rule.scope).toBe("project");
 
-    // Verify finding was marked as promoted
-    const findingsContent = fs.readFileSync(findingsPath, "utf-8");
-    expect(findingsContent).toContain('"promoted"');
+    // Verify insight was marked as consolidated
+    const insightsContent = fs.readFileSync(insightsPath, "utf-8");
+    expect(insightsContent).toContain('"consolidated"');
   });
 
-  it("skip: no promotions.jsonl entry, findings unchanged", async () => {
+  it("skip: no rules.jsonl entry, insights unchanged", async () => {
     const sivDir = path.join(tmpDir, ".siv");
-    const findingsPath = path.join(sivDir, "findings.jsonl");
+    const insightsPath = path.join(sivDir, "insights.jsonl");
     fs.writeFileSync(
-      findingsPath,
-      JSON.stringify({ id: "LRN-20260305-def", status: "pending" }) + "\n",
+      insightsPath,
+      JSON.stringify({ id: "INS-20260305-def", status: "pending" }) + "\n",
       "utf-8"
     );
 
@@ -127,14 +127,14 @@ describe("executePromoteFinding", () => {
       result: {
         action: "skip",
         entry: "",
-        reason: "duplicate of existing promotion",
-      } satisfies PromoteWriterOutput,
+        reason: "duplicate of existing rule",
+      } satisfies ConsolidateWriterOutput,
       usage: { input_tokens: 100, output_tokens: 30 },
     });
 
-    const result = await executePromoteFinding(
+    const result = await executeConsolidate(
       {
-        findingIds: ["LRN-20260305-def"],
+        insightIds: ["INS-20260305-def"],
         scope: "global",
         category: "learning",
         rule: "Already known rule",
@@ -144,30 +144,30 @@ describe("executePromoteFinding", () => {
 
     expect(result.action).toBe("skip");
 
-    // Verify no promotions.jsonl entry
-    const promotionsPath = path.join(sivDir, "promotions.jsonl");
-    expect(fs.existsSync(promotionsPath)).toBe(false);
+    // Verify no rules.jsonl entry
+    const rulesPath = path.join(sivDir, "rules.jsonl");
+    expect(fs.existsSync(rulesPath)).toBe(false);
 
-    // Verify finding status unchanged
-    const findingsContent = fs.readFileSync(findingsPath, "utf-8");
-    expect(findingsContent).toContain('"pending"');
-    expect(findingsContent).not.toContain('"promoted"');
+    // Verify insight status unchanged
+    const insightsContent = fs.readFileSync(insightsPath, "utf-8");
+    expect(insightsContent).toContain('"pending"');
+    expect(insightsContent).not.toContain('"consolidated"');
   });
 
-  it("LLM receives existing active promotions for dedup", async () => {
+  it("LLM receives existing active rules for dedup", async () => {
     const sivDir = path.join(tmpDir, ".siv");
-    const findingsPath = path.join(sivDir, "findings.jsonl");
+    const insightsPath = path.join(sivDir, "insights.jsonl");
     fs.writeFileSync(
-      findingsPath,
-      JSON.stringify({ id: "LRN-20260305-ghi", status: "pending" }) + "\n",
+      insightsPath,
+      JSON.stringify({ id: "INS-20260305-ghi", status: "pending" }) + "\n",
       "utf-8"
     );
 
-    // Write an existing active promotion
-    const existingPromotion = {
-      id: "PRM-20260305-aaa",
+    // Write an existing active rule
+    const existingRule = {
+      id: "RUL-20260305-aaa",
       ts: "2026-03-05T00:00:00Z",
-      finding_ids: ["LRN-20260305-old"],
+      insight_ids: ["INS-20260305-old"],
       scope: "project",
       project: "project",
       project_path: "/Users/me/work/project",
@@ -177,8 +177,8 @@ describe("executePromoteFinding", () => {
       status: "active",
     };
     fs.writeFileSync(
-      path.join(sivDir, "promotions.jsonl"),
-      JSON.stringify(existingPromotion) + "\n",
+      path.join(sivDir, "rules.jsonl"),
+      JSON.stringify(existingRule) + "\n",
       "utf-8"
     );
 
@@ -187,13 +187,13 @@ describe("executePromoteFinding", () => {
         action: "create",
         entry: "New unrelated rule",
         reason: "genuinely new",
-      } satisfies PromoteWriterOutput,
+      } satisfies ConsolidateWriterOutput,
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    await executePromoteFinding(
+    await executeConsolidate(
       {
-        findingIds: ["LRN-20260305-ghi"],
+        insightIds: ["INS-20260305-ghi"],
         scope: "project",
         project: "project",
         projectPath: "/Users/me/work/project",
@@ -203,27 +203,27 @@ describe("executePromoteFinding", () => {
       tmpDir
     );
 
-    // Verify LLM was called with existing promotions
+    // Verify LLM was called with existing rules
     const callArgs = mockedCallLLM.mock.calls[0];
     const userPrompt = callArgs[2]; // system, user
-    expect(userPrompt).toContain("PRM-20260305-aaa");
+    expect(userPrompt).toContain("RUL-20260305-aaa");
     expect(userPrompt).toContain("Existing rule about reading files");
   });
 
-  it("merge: supersedes old promotion and appends new one", async () => {
+  it("merge: supersedes old rule and appends new one", async () => {
     const sivDir = path.join(tmpDir, ".siv");
-    const findingsPath = path.join(sivDir, "findings.jsonl");
+    const insightsPath = path.join(sivDir, "insights.jsonl");
     fs.writeFileSync(
-      findingsPath,
-      JSON.stringify({ id: "LRN-20260305-jkl", status: "pending" }) + "\n",
+      insightsPath,
+      JSON.stringify({ id: "INS-20260305-jkl", status: "pending" }) + "\n",
       "utf-8"
     );
 
-    // Write existing promotion to merge with
-    const oldPromotion = {
-      id: "PRM-20260305-bbb",
+    // Write existing rule to merge with
+    const oldRule = {
+      id: "RUL-20260305-bbb",
       ts: "2026-03-05T00:00:00Z",
-      finding_ids: ["LRN-20260305-old"],
+      insight_ids: ["INS-20260305-old"],
       scope: "project",
       project: "project",
       project_path: "/Users/me/work/project",
@@ -233,8 +233,8 @@ describe("executePromoteFinding", () => {
       status: "active",
     };
     fs.writeFileSync(
-      path.join(sivDir, "promotions.jsonl"),
-      JSON.stringify(oldPromotion) + "\n",
+      path.join(sivDir, "rules.jsonl"),
+      JSON.stringify(oldRule) + "\n",
       "utf-8"
     );
 
@@ -243,14 +243,14 @@ describe("executePromoteFinding", () => {
         action: "merge",
         entry: "Combined rule with more detail",
         reason: "overlapping rules merged",
-        supersedes_ids: ["PRM-20260305-bbb"],
-      } satisfies PromoteWriterOutput,
+        supersedes_ids: ["RUL-20260305-bbb"],
+      } satisfies ConsolidateWriterOutput,
       usage: { input_tokens: 100, output_tokens: 50 },
     });
 
-    const result = await executePromoteFinding(
+    const result = await executeConsolidate(
       {
-        findingIds: ["LRN-20260305-jkl"],
+        insightIds: ["INS-20260305-jkl"],
         scope: "project",
         project: "project",
         projectPath: "/Users/me/work/project",
@@ -262,23 +262,23 @@ describe("executePromoteFinding", () => {
 
     expect(result.action).toBe("merge");
 
-    // Read promotions.jsonl — should have 2 lines
-    const promotionsContent = fs.readFileSync(
-      path.join(sivDir, "promotions.jsonl"),
+    // Read rules.jsonl — should have 2 lines
+    const rulesContent = fs.readFileSync(
+      path.join(sivDir, "rules.jsonl"),
       "utf-8"
     );
-    const lines = promotionsContent.trim().split("\n");
+    const lines = rulesContent.trim().split("\n");
     expect(lines).toHaveLength(2);
 
-    // First line: old promotion marked superseded
+    // First line: old rule marked superseded
     const old = JSON.parse(lines[0]);
-    expect(old.id).toBe("PRM-20260305-bbb");
+    expect(old.id).toBe("RUL-20260305-bbb");
     expect(old.status).toBe("superseded");
 
-    // Second line: new active promotion
-    const newPromo = JSON.parse(lines[1]);
-    expect(newPromo.status).toBe("active");
-    expect(newPromo.action_taken).toBe("merge");
-    expect(newPromo.rule).toBe("Combined rule with more detail");
+    // Second line: new active rule
+    const newRule = JSON.parse(lines[1]);
+    expect(newRule.status).toBe("active");
+    expect(newRule.action_taken).toBe("merge");
+    expect(newRule.rule).toBe("Combined rule with more detail");
   });
 });

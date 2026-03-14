@@ -1,17 +1,17 @@
 /**
- * Build the distillation prompt for grouping findings into promotable rules.
+ * Build the distillation prompt for grouping insights into consolidatable rules.
  *
- * The LLM distills each group of related findings into a single
+ * The LLM distills each group of related insights into a single
  * concise actionable rule.
  */
 
-export interface FindingGroup {
+export interface InsightGroup {
   group_id: number;
   project: string;
   project_path: string;
   scope: "project" | "global";
   category: string;
-  findings: Array<{
+  insights: Array<{
     id: string;
     summary: string;
     details: string;
@@ -20,8 +20,8 @@ export interface FindingGroup {
 }
 
 export interface DistillOutput {
-  promotions: Array<{
-    finding_ids: string[];
+  rules: Array<{
+    insight_ids: string[];
     scope: "project" | "global";
     project: string;
     project_path: string;
@@ -30,11 +30,11 @@ export interface DistillOutput {
   }>;
 }
 
-export function buildDistillPrompt(groups: FindingGroup[]): {
+export function buildDistillPrompt(groups: InsightGroup[]): {
   system: string;
   user: string;
 } {
-  const system = `You are a memory distiller for an AI coding agent. Your job is to evaluate groups of related findings and distill worthy groups into concise, actionable rules.
+  const system = `You are a memory distiller for an AI coding agent. Your job is to evaluate groups of related insights and distill worthy groups into concise, actionable rules.
 
 ## Quality gate — apply BEFORE distilling each group
 
@@ -52,8 +52,8 @@ PROMOTE a group if ALL of these apply:
 ## Constraints
 
 - Keep rules under 100 words.
-- Include ALL finding IDs from each group in the output.
-- When merging findings, use the NARROWEST correct scope. Do not add qualifiers like "even for X" unless ALL findings in the group support it.
+- Include ALL insight IDs from each group in the output.
+- When merging insights, use the NARROWEST correct scope. Do not add qualifiers like "even for X" unless ALL insights in the group support it.
 - For errors: state what to do instead (not just what went wrong).
 - For learnings: state what to do (not what was learned).
 
@@ -65,17 +65,17 @@ PROMOTE a group if ALL of these apply:
   "project_path": "/path/to/my-project",
   "scope": "project",
   "category": "error",
-  "findings": [
-    {"id": "ERR-001", "summary": "When editing a file, always read it first — Edit tool errors without a prior Read", "details": "Agent tried Edit without Read, got tool constraint error, had to retry.", "session": "abc"},
-    {"id": "LRN-001", "summary": "Read files before Write to verify the target path exists and content is as expected", "details": "Agent wrote to wrong path because it didn't check first.", "session": "def"}
+  "insights": [
+    {"id": "INS-001", "summary": "When editing a file, always read it first — Edit tool errors without a prior Read", "details": "Agent tried Edit without Read, got tool constraint error, had to retry.", "session": "abc"},
+    {"id": "INS-002", "summary": "Read files before Write to verify the target path exists and content is as expected", "details": "Agent wrote to wrong path because it didn't check first.", "session": "def"}
   ]
 }
 </input>
 
 <correct-output>
 {
-  "promotions": [{
-    "finding_ids": ["ERR-001", "LRN-001"],
+  "rules": [{
+    "insight_ids": ["INS-001", "INS-002"],
     "scope": "project",
     "project": "my-project",
     "project_path": "/path/to/my-project",
@@ -85,10 +85,10 @@ PROMOTE a group if ALL of these apply:
 }
 </correct-output>
 
-<incorrect-output reason="Over-generalized — added 'even for new files' which only ERR-001 implies and LRN-001 contradicts">
+<incorrect-output reason="Over-generalized — added 'even for new files' which only INS-001 implies and INS-002 contradicts">
 {
-  "promotions": [{
-    "finding_ids": ["ERR-001", "LRN-001"],
+  "rules": [{
+    "insight_ids": ["INS-001", "INS-002"],
     "scope": "project",
     "project": "my-project",
     "project_path": "/path/to/my-project",
@@ -100,8 +100,8 @@ PROMOTE a group if ALL of these apply:
 
 <incorrect-output reason="One-time config fix, not a reusable agent behavior rule — REJECT this group">
 {
-  "promotions": [{
-    "finding_ids": ["LRN-042"],
+  "rules": [{
+    "insight_ids": ["INS-042"],
     "scope": "project",
     "project": "my-project",
     "project_path": "/path/to/my-project",
@@ -113,8 +113,8 @@ PROMOTE a group if ALL of these apply:
 
 <incorrect-output reason="Code-level fix, not agent behavior — REJECT this group">
 {
-  "promotions": [{
-    "finding_ids": ["ERR-055"],
+  "rules": [{
+    "insight_ids": ["INS-055"],
     "scope": "project",
     "project": "my-project",
     "project_path": "/path/to/my-project",
@@ -127,11 +127,11 @@ PROMOTE a group if ALL of these apply:
 
 ## Return format
 
-Return ONLY valid JSON. If no groups pass the quality gate, return {"promotions": []}.
+Return ONLY valid JSON. If no groups pass the quality gate, return {"rules": []}.
 {
-  "promotions": [
+  "rules": [
     {
-      "finding_ids": ["LRN-...", "ERR-..."],
+      "insight_ids": ["INS-...", "INS-..."],
       "scope": "project",
       "project": "project-name",
       "project_path": "/path/to/project",
@@ -141,7 +141,7 @@ Return ONLY valid JSON. If no groups pass the quality gate, return {"promotions"
   ]
 }`;
 
-  const user = `Distill the following finding groups into promotion rules:\n\n${JSON.stringify(groups, null, 2)}`;
+  const user = `Distill the following insight groups into rules:\n\n${JSON.stringify(groups, null, 2)}`;
 
   return { system, user };
 }
