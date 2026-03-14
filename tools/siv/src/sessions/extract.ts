@@ -143,6 +143,12 @@ export interface CompactionInfo {
   content: unknown;
 }
 
+export interface EmotionMarker {
+  type: string;
+  context: string;
+  turn_index: number; // 0-based human-turn counter
+}
+
 export interface SessionExtraction {
   metadata: SessionMetadata;
   conversation: ConversationTurn[];
@@ -153,6 +159,7 @@ export interface SessionExtraction {
   api_errors: ApiError[];
   compactions: CompactionInfo[];
   subagent_files: string[];
+  emotion_markers: EmotionMarker[];
 }
 
 export interface SubsessionExtraction {
@@ -164,6 +171,7 @@ export interface SubsessionExtraction {
   tool_usage_summary: Record<string, ToolUsageEntry>;
   api_errors: ApiError[];
   compactions: CompactionInfo[];
+  emotion_markers: EmotionMarker[];
 }
 
 // Use Record<string, unknown> as the base record type
@@ -903,6 +911,57 @@ export function extractCompactions(records: Rec[]): CompactionInfo[] {
 }
 
 // ---------------------------------------------------------------------------
+// Emotion marker extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract emotion markers from Bash tool calls matching `siv mark <type> [context]`.
+ */
+export function extractEmotionMarkers(records: Rec[]): EmotionMarker[] {
+  const markers: EmotionMarker[] = [];
+  let turnIndex = 0;
+
+  for (const rec of records) {
+    const cat = classifyRecord(rec);
+    if (cat === "human_message") {
+      turnIndex++;
+      continue;
+    }
+    if (rec.type !== "assistant") continue;
+
+    const msg = (rec.message ?? {}) as Rec;
+    const content = msg.content;
+    if (!Array.isArray(content)) continue;
+
+    for (const block of content) {
+      if (typeof block !== "object" || block === null) continue;
+      const b = block as Rec;
+      if (b.type !== "tool_use" || b.name !== "Bash") continue;
+
+      const input = (b.input ?? {}) as Rec;
+      const command = (input.command as string) ?? "";
+      if (!command.startsWith("siv mark ")) continue;
+
+      const afterMark = command.slice("siv mark ".length).trim();
+      const parts = afterMark.match(/^(\S+)\s*(.*)/);
+      if (!parts) continue;
+
+      const markerType = parts[1];
+      let context = parts[2].trim();
+      if (
+        (context.startsWith('"') && context.endsWith('"')) ||
+        (context.startsWith("'") && context.endsWith("'"))
+      ) {
+        context = context.slice(1, -1);
+      }
+
+      markers.push({ type: markerType, context, turn_index: turnIndex });
+    }
+  }
+  return markers;
+}
+
+// ---------------------------------------------------------------------------
 // Task 10 — Full pipeline
 // ---------------------------------------------------------------------------
 
@@ -952,6 +1011,7 @@ export function extractSession(filePath: string): SessionExtraction | null {
     api_errors: extractApiErrors(records),
     compactions: extractCompactions(records),
     subagent_files: findSubagentFiles(filePath),
+    emotion_markers: extractEmotionMarkers(records),
   };
 }
 
@@ -982,5 +1042,6 @@ export function extractSubsession(
     tool_usage_summary: extractToolUsageSummary(records),
     api_errors: extractApiErrors(records),
     compactions: extractCompactions(records),
+    emotion_markers: extractEmotionMarkers(records),
   };
 }

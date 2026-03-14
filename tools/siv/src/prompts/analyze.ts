@@ -3,25 +3,14 @@
  *
  * The system prompt instructs the LLM to analyze a condensed session
  * transcript and return structured insights as JSON.
+ *
+ * Two variants:
+ * - buildAnalyzePrompt: full-session scan (no markers)
+ * - buildMarkerAnalyzePrompt: focused analysis around emotion markers
  */
 
-export function buildAnalyzePrompt(condensedJson: string): {
-  system: string;
-  user: string;
-} {
-  const system = `You are a session analyst for an AI agent self-improvement system. You extract rules from coding sessions that get consolidated into the agent's memory, making it smarter over time. The agent reads these rules at the start of every future session.
-
-Extract knowledge that makes the agent better — techniques, user preferences, workflow patterns, debugging strategies. Skip things already encoded in the codebase (bug fixes, implemented features) — the agent can read code, but it can't learn from experience without your help.
-
-## What to look for
-
-1. **User corrections**: User said "do X instead" -> it worked. What's the rule?
-2. **Multi-attempt breakthroughs**: Tried A (failed), tried B (failed), tried C (worked). The rule is to use C directly.
-3. **Wasted iterations**: Spent many steps on something solvable in 1 if you knew the trick.
-4. **User-supplied knowledge**: User provided a URL, config, API format, or pattern the agent didn't know.
-5. **Wrong assumptions**: Agent assumed X, reality was Y, causing backtracking.
-
-## What NOT to report
+/** Shared quality guidance used by both full-scan and marker-aware prompts. */
+const SHARED_QUALITY_GUIDANCE = `## What NOT to report
 
 NEVER report these — even if they involved struggle or multiple attempts:
 - Tool constraints (e.g., "Edit requires a prior Read") — enforced by the tool itself
@@ -87,7 +76,49 @@ Bad examples (DO NOT write these):
 
 If there are no insights worth reporting, return: { "insights": [] }`;
 
+export { SHARED_QUALITY_GUIDANCE };
+
+export function buildAnalyzePrompt(condensedJson: string): {
+  system: string;
+  user: string;
+} {
+  const system = `You are a session analyst for an AI agent self-improvement system. You extract rules from coding sessions that get consolidated into the agent's memory, making it smarter over time. The agent reads these rules at the start of every future session.
+
+Extract knowledge that makes the agent better — techniques, user preferences, workflow patterns, debugging strategies. Skip things already encoded in the codebase (bug fixes, implemented features) — the agent can read code, but it can't learn from experience without your help.
+
+## What to look for
+
+1. **User corrections**: User said "do X instead" -> it worked. What's the rule?
+2. **Multi-attempt breakthroughs**: Tried A (failed), tried B (failed), tried C (worked). The rule is to use C directly.
+3. **Wasted iterations**: Spent many steps on something solvable in 1 if you knew the trick.
+4. **User-supplied knowledge**: User provided a URL, config, API format, or pattern the agent didn't know.
+5. **Wrong assumptions**: Agent assumed X, reality was Y, causing backtracking.
+
+${SHARED_QUALITY_GUIDANCE}`;
+
   const user = `Analyze this session transcript and extract reusable rules:\n\n${condensedJson}`;
+
+  return { system, user };
+}
+
+export function buildMarkerAnalyzePrompt(
+  markers: Array<{ type: string; context: string; turn_index: number }>,
+  contextWindows: string
+): { system: string; user: string } {
+  const system = `You are a session analyst for an AI agent self-improvement system. You extract rules from emotionally significant moments in coding sessions.
+
+The agent flagged specific moments during this session. Analyze ONLY the flagged moments and their surrounding context to extract reusable rules.
+
+## Marker types and what to look for
+
+- **frustration**: Agent was stuck or retrying -> look for process/tool gaps
+- **correction**: User corrected the agent -> look for knowledge/process gaps
+- **breakthrough**: Agent figured something out after struggle -> capture the insight
+- **surprise**: Data or behavior was unexpected -> potential new knowledge
+
+${SHARED_QUALITY_GUIDANCE}`;
+
+  const user = `Analyze these flagged moments and their surrounding context:\n\n## Markers\n${JSON.stringify(markers, null, 2)}\n\n## Context Windows\n${contextWindows}`;
 
   return { system, user };
 }

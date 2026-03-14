@@ -21,6 +21,7 @@ import {
   truncate,
   summarizeToolInput,
   extractToolResultContent,
+  extractEmotionMarkers,
   CONTENT_PREVIEW_MAX_CHARS,
   TOOL_INPUT_MAX_CHARS,
 } from "../../src/sessions/extract.js";
@@ -1520,5 +1521,240 @@ describe("extractSubsession", () => {
     const p = path.join(tmpDir, "agent-empty.jsonl");
     fs.writeFileSync(p, "");
     expect(extractSubsession(p)).toBeNull();
+  });
+});
+
+// =========================================================================
+// Emotion marker extraction
+// =========================================================================
+
+describe("extractEmotionMarkers", () => {
+  it("extracts marker with double-quoted context", () => {
+    const records = [
+      { type: "user", message: { content: "first human message" } },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-1",
+              name: "Bash",
+              input: { command: 'siv mark frustration "stuck on API"' },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toEqual({
+      type: "frustration",
+      context: "stuck on API",
+      turn_index: 1,
+    });
+  });
+
+  it("extracts marker with single-quoted context", () => {
+    const records = [
+      { type: "user", message: { content: "hello" } },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-2",
+              name: "Bash",
+              input: { command: "siv mark correction 'wrong approach'" },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(1);
+    expect(markers[0].type).toBe("correction");
+    expect(markers[0].context).toBe("wrong approach");
+  });
+
+  it("extracts marker without quotes", () => {
+    const records = [
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-3",
+              name: "Bash",
+              input: { command: "siv mark breakthrough figured it out" },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toEqual({
+      type: "breakthrough",
+      context: "figured it out",
+      turn_index: 0,
+    });
+  });
+
+  it("extracts marker with no context", () => {
+    const records = [
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-4",
+              name: "Bash",
+              input: { command: "siv mark surprise" },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(1);
+    expect(markers[0].type).toBe("surprise");
+    expect(markers[0].context).toBe("");
+  });
+
+  it("tracks turn_index correctly across multiple human turns", () => {
+    const records = [
+      { type: "user", message: { content: "turn 1" } },
+      { type: "assistant", message: { content: [{ type: "text", text: "ok" }] } },
+      { type: "user", message: { content: "turn 2" } },
+      { type: "user", message: { content: "turn 3" } },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-5",
+              name: "Bash",
+              input: { command: 'siv mark frustration "after 3 turns"' },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(1);
+    expect(markers[0].turn_index).toBe(3);
+  });
+
+  it("extracts multiple markers from different turns", () => {
+    const records = [
+      { type: "user", message: { content: "start" } },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-6",
+              name: "Bash",
+              input: { command: "siv mark frustration stuck" },
+            },
+          ],
+        },
+      },
+      { type: "user", message: { content: "middle" } },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-7",
+              name: "Bash",
+              input: { command: "siv mark breakthrough solved" },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(2);
+    expect(markers[0].type).toBe("frustration");
+    expect(markers[0].turn_index).toBe(1);
+    expect(markers[1].type).toBe("breakthrough");
+    expect(markers[1].turn_index).toBe(2);
+  });
+
+  it("returns empty array when no markers present", () => {
+    const records = [
+      { type: "user", message: { content: "hello" } },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-8",
+              name: "Bash",
+              input: { command: "git status" },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(0);
+  });
+
+  it("ignores non-Bash tool_use blocks", () => {
+    const records = [
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-9",
+              name: "Read",
+              input: { command: "siv mark frustration test" },
+            },
+          ],
+        },
+      },
+    ];
+    const markers = extractEmotionMarkers(records);
+    expect(markers).toHaveLength(0);
+  });
+});
+
+describe("extractSession includes emotion_markers", () => {
+  it("includes emotion_markers in extraction result", () => {
+    const records = [
+      { type: "user", message: { content: "hello" } },
+      {
+        type: "assistant",
+        message: {
+          id: "msg-1",
+          content: [
+            {
+              type: "tool_use",
+              id: "tu-10",
+              name: "Bash",
+              input: { command: 'siv mark frustration "test marker"' },
+            },
+          ],
+        },
+      },
+    ];
+
+    const filePath = writeJsonl(tmpDir, "main-session.jsonl", records);
+    const result = extractSession(filePath);
+    expect(result).not.toBeNull();
+    expect(result!.emotion_markers).toHaveLength(1);
+    expect(result!.emotion_markers[0].type).toBe("frustration");
   });
 });

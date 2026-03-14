@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildAnalyzePrompt } from "../../src/prompts/analyze.js";
+import {
+  buildAnalyzePrompt,
+  buildMarkerAnalyzePrompt,
+} from "../../src/prompts/analyze.js";
 
 // Mock all external dependencies
 vi.mock("../../src/config.js", () => ({
@@ -129,6 +132,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
+      emotion_markers: [],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -248,6 +252,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
+      emotion_markers: [],
     });
 
     mockCallLLM.mockRejectedValue(new Error("API timeout"));
@@ -287,6 +292,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
+      emotion_markers: [],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -347,6 +353,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
+      emotion_markers: [],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -384,6 +391,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
+      emotion_markers: [],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -399,5 +407,157 @@ describe("executeAnalyze", () => {
     expect(mockExecuteLog).not.toHaveBeenCalled();
 
     logSpy.mockRestore();
+  });
+
+  it("uses marker-aware analysis when emotion_markers are present", async () => {
+    mockSearchSessions.mockReturnValue([
+      {
+        path: "/sessions/marked.jsonl",
+        session_id: "sess-marked",
+        modified: "2026-03-01T00:00:00",
+        size_bytes: 1000,
+        turn_count: 5,
+      },
+    ]);
+
+    mockExtractSession.mockReturnValue({
+      metadata: { session_id: "sess-marked", slug: "proj", cwd: "/proj" },
+      conversation: [
+        { type: "human_message", text: "first message" },
+        { type: "assistant_turn", message_id: "m1", text: "ok", tool_calls: [] },
+        { type: "human_message", text: "second message" },
+        { type: "assistant_turn", message_id: "m2", text: "done", tool_calls: [] },
+      ],
+      skills: [],
+      subagents: [],
+      tool_failures: [],
+      tool_usage_summary: {},
+      api_errors: [],
+      compactions: [],
+      subagent_files: [],
+      emotion_markers: [
+        { type: "frustration", context: "stuck on API", turn_index: 1 },
+      ],
+    });
+
+    mockCallLLM.mockResolvedValue({
+      result: {
+        insights: [
+          {
+            category: "knowledge_gap",
+            summary: "When calling the API, check auth first",
+            details: "Agent tried unauthenticated calls repeatedly.",
+            priority: "high",
+            tags: ["api"],
+          },
+        ],
+      },
+      usage: { input_tokens: 80, output_tokens: 40 },
+    });
+
+    mockExecuteLog.mockReturnValue({ id: "INS-20260301-mrk", status: "logged" });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await executeAnalyze({});
+
+    // Should have called LLM with marker-focused prompt
+    expect(mockCallLLM).toHaveBeenCalledTimes(1);
+    const [, systemPrompt] = mockCallLLM.mock.calls[0];
+    expect(systemPrompt).toContain("emotionally significant moments");
+    expect(systemPrompt).toContain("frustration");
+    expect(systemPrompt).toContain("Marker types");
+
+    // Should still log the insight
+    expect(mockExecuteLog).toHaveBeenCalledTimes(1);
+    expect(mockExecuteLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "knowledge_gap",
+        summary: "When calling the API, check auth first",
+      })
+    );
+
+    logSpy.mockRestore();
+  });
+
+  it("uses full-scan analysis when no emotion_markers", async () => {
+    mockSearchSessions.mockReturnValue([
+      {
+        path: "/sessions/nomark.jsonl",
+        session_id: "sess-nomark",
+        modified: "2026-03-01T00:00:00",
+        size_bytes: 1000,
+        turn_count: 5,
+      },
+    ]);
+
+    mockExtractSession.mockReturnValue({
+      metadata: { session_id: "sess-nomark", slug: "proj", cwd: "/proj" },
+      conversation: [],
+      skills: [],
+      subagents: [],
+      tool_failures: [],
+      tool_usage_summary: {},
+      api_errors: [],
+      compactions: [],
+      subagent_files: [],
+      emotion_markers: [],
+    });
+
+    mockCallLLM.mockResolvedValue({
+      result: { insights: [] },
+      usage: { input_tokens: 50, output_tokens: 10 },
+    });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await executeAnalyze({});
+
+    // Should have called LLM with full-scan prompt (not marker-aware)
+    expect(mockCallLLM).toHaveBeenCalledTimes(1);
+    const [, systemPrompt] = mockCallLLM.mock.calls[0];
+    expect(systemPrompt).toContain("Extract knowledge that makes the agent better");
+    expect(systemPrompt).not.toContain("emotionally significant moments");
+
+    logSpy.mockRestore();
+  });
+});
+
+describe("buildMarkerAnalyzePrompt", () => {
+  it("returns system and user prompts with marker types", () => {
+    const markers = [
+      { type: "frustration", context: "stuck on API", turn_index: 1 },
+    ];
+    const result = buildMarkerAnalyzePrompt(markers, "[]");
+
+    expect(result.system).toContain("emotionally significant moments");
+    expect(result.system).toContain("frustration");
+    expect(result.system).toContain("correction");
+    expect(result.system).toContain("breakthrough");
+    expect(result.system).toContain("surprise");
+  });
+
+  it("includes markers and context windows in user prompt", () => {
+    const markers = [
+      { type: "frustration", context: "stuck", turn_index: 2 },
+    ];
+    const contextWindows = '[{"type":"human_message","text":"help"}]';
+    const result = buildMarkerAnalyzePrompt(markers, contextWindows);
+
+    expect(result.user).toContain("## Markers");
+    expect(result.user).toContain("frustration");
+    expect(result.user).toContain("## Context Windows");
+    expect(result.user).toContain(contextWindows);
+  });
+
+  it("shares quality guidance with full-scan prompt", () => {
+    const fullPrompt = buildAnalyzePrompt("{}");
+    const markerPrompt = buildMarkerAnalyzePrompt([], "[]");
+
+    // Both should contain the shared quality guidance sections
+    expect(fullPrompt.system).toContain("What NOT to report");
+    expect(markerPrompt.system).toContain("What NOT to report");
+    expect(fullPrompt.system).toContain("Quality bar");
+    expect(markerPrompt.system).toContain("Quality bar");
+    expect(fullPrompt.system).toContain("Summary format");
+    expect(markerPrompt.system).toContain("Summary format");
   });
 });

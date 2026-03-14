@@ -12,11 +12,15 @@ import {
   extractSession,
   type SessionExtraction,
   type ConversationTurn,
+  type EmotionMarker,
 } from "../sessions/extract.js";
 import { callLLM } from "../llm.js";
 import { executeLog } from "./log.js";
 import { appendJsonl, readJsonl } from "../storage.js";
-import { buildAnalyzePrompt } from "../prompts/analyze.js";
+import {
+  buildAnalyzePrompt,
+  buildMarkerAnalyzePrompt,
+} from "../prompts/analyze.js";
 import type { InsightCategory, Priority } from "../types.js";
 import { ClaudeCodeSessionAdapter } from "../adapters/claude-code-session.js";
 import type { SourceAdapter, ScanCandidate } from "../adapters/types.js";
@@ -177,7 +181,15 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
     const projectPath = extraction.metadata.cwd ?? "";
 
     try {
-      const insights = await analyzeExtraction(config, extraction);
+      const markers = extraction.emotion_markers;
+      let insights: AnalyzeInsight[];
+
+      if (markers.length > 0) {
+        const contextWindows = buildContextWindows(extraction, markers);
+        insights = await callMarkerAnalyze(config, markers, contextWindows);
+      } else {
+        insights = await analyzeExtraction(config, extraction);
+      }
 
       for (const insight of insights) {
         const category = VALID_CATEGORIES.has(insight.category)
@@ -353,6 +365,105 @@ function chunkConversation(
   }
 
   return chunks;
+}
+
+/**
+ * Deduplicate markers of same type within 3 human turns.
+ * Keeps first marker in each cluster.
+ */
+function deduplicateMarkers(markers: EmotionMarker[]): EmotionMarker[] {
+  const sorted = [...markers].sort((a, b) => a.turn_index - b.turn_index);
+  const result: EmotionMarker[] = [];
+  const lastKept = new Map<string, number>();
+
+  for (const m of sorted) {
+    const prev = lastKept.get(m.type);
+    if (prev !== undefined && m.turn_index - prev <= 3) continue;
+    result.push(m);
+    lastKept.set(m.type, m.turn_index);
+  }
+  return result;
+}
+
+/**
+ * Merge overlapping or adjacent windows.
+ */
+function mergeWindows(
+  windows: Array<{ start: number; end: number }>
+): Array<{ start: number; end: number }> {
+  if (windows.length === 0) return [];
+  const sorted = [...windows].sort((a, b) => a.start - b.start);
+  const merged = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    if (sorted[i].start <= last.end) {
+      last.end = Math.max(last.end, sorted[i].end);
+    } else {
+      merged.push(sorted[i]);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Build context windows around emotion markers.
+ * Per spec: 5 human turns before + 2 human turns after each marker.
+ */
+function buildContextWindows(
+  extraction: SessionExtraction,
+  markers: EmotionMarker[]
+): string {
+  const conversation = extraction.conversation;
+  const humanTurnPositions: number[] = [];
+  for (let i = 0; i < conversation.length; i++) {
+    if (conversation[i].type === "human_message") {
+      humanTurnPositions.push(i);
+    }
+  }
+
+  const deduped = deduplicateMarkers(markers);
+  const windows: Array<{ start: number; end: number }> = [];
+
+  for (const marker of deduped) {
+    const humanIdx = Math.min(
+      marker.turn_index,
+      humanTurnPositions.length - 1
+    );
+    const startHumanIdx = Math.max(0, humanIdx - 5);
+    const endHumanIdx = Math.min(
+      humanTurnPositions.length - 1,
+      humanIdx + 2
+    );
+    windows.push({
+      start: humanTurnPositions[startHumanIdx],
+      end:
+        endHumanIdx + 1 < humanTurnPositions.length
+          ? humanTurnPositions[endHumanIdx + 1]
+          : conversation.length,
+    });
+  }
+
+  const merged = mergeWindows(windows);
+  return merged
+    .map((w) => JSON.stringify(conversation.slice(w.start, w.end)))
+    .join("\n\n---\n\n");
+}
+
+async function callMarkerAnalyze(
+  config: SivConfig,
+  markers: EmotionMarker[],
+  contextWindows: string
+): Promise<AnalyzeInsight[]> {
+  const prompt = buildMarkerAnalyzePrompt(markers, contextWindows);
+  const llmResult = await callLLM<AnalyzeResponse>(
+    config,
+    prompt.system,
+    prompt.user
+  );
+  if (!llmResult.result.insights || !Array.isArray(llmResult.result.insights)) {
+    return [];
+  }
+  return llmResult.result.insights;
 }
 
 function logScan(
