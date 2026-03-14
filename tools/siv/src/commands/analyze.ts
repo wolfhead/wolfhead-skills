@@ -8,7 +8,6 @@
 
 import fs from "fs";
 import { loadConfig, type SivConfig } from "../config.js";
-import { searchSessions } from "../sessions/search.js";
 import {
   extractSession,
   type SessionExtraction,
@@ -19,12 +18,15 @@ import { executeLog } from "./log.js";
 import { appendJsonl, readJsonl } from "../storage.js";
 import { buildAnalyzePrompt } from "../prompts/analyze.js";
 import type { InsightCategory, Priority } from "../types.js";
+import { ClaudeCodeSessionAdapter } from "../adapters/claude-code-session.js";
+import type { SourceAdapter, ScanCandidate } from "../adapters/types.js";
 
 export interface AnalyzeOptions {
   latest?: number;
   projectPath?: string;
   since?: string;
   session?: string;
+  source?: string;
 }
 
 interface AnalyzeInsight {
@@ -41,6 +43,7 @@ interface AnalyzeResponse {
 
 interface ScanRecord {
   session_id: string;
+  source: string;
   scanned_at: string;
   file_modified: string;
   file_size_bytes: number;
@@ -51,6 +54,15 @@ interface ScanRecord {
   chunks?: number;
   status: "ok" | "error" | "skipped";
   error?: string;
+}
+
+function getAdapter(sourceName: string): SourceAdapter {
+  switch (sourceName) {
+    case "claude-code-session":
+      return new ClaudeCodeSessionAdapter();
+    default:
+      throw new Error(`Unknown source adapter: ${sourceName}`);
+  }
 }
 
 const MIN_NEW_LINES = 3;
@@ -74,20 +86,20 @@ const VALID_PRIORITIES: Set<string> = new Set([
 
 export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
   const config = loadConfig();
+  const adapter = getAdapter(options.source ?? "claude-code-session");
 
-  const sessions = searchSessions({
+  const candidates = await adapter.scan({
     latest: options.latest,
     projectPath: options.projectPath,
     since: options.since,
-    minTurns: 1,
   });
 
   // If --session is given, filter to that specific session
-  const targetSessions = options.session
-    ? sessions.filter((s) => s.session_id === options.session)
-    : sessions;
+  const targetCandidates = options.session
+    ? candidates.filter((c) => c.id === options.session)
+    : candidates;
 
-  if (targetSessions.length === 0) {
+  if (targetCandidates.length === 0) {
     console.log("No sessions found matching criteria.");
     return;
   }
@@ -99,20 +111,20 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
     scannedSessions.set(scan.session_id, scan);
   }
 
-  const newSessions = targetSessions.filter((s) => {
-    const prev = scannedSessions.get(s.session_id);
+  const newCandidates = targetCandidates.filter((c) => {
+    const prev = scannedSessions.get(c.id);
     if (!prev) return true;
-    if (prev.file_modified === s.modified) return false;
-    const currentLines = countLines(s.path);
+    if (prev.file_modified === (c.metadata.modified as string)) return false;
+    const currentLines = countLines(c.metadata.path as string);
     return currentLines - prev.line_count >= MIN_NEW_LINES;
   });
 
-  if (newSessions.length < targetSessions.length) {
-    const skipped = targetSessions.length - newSessions.length;
+  if (newCandidates.length < targetCandidates.length) {
+    const skipped = targetCandidates.length - newCandidates.length;
     console.log(`Skipping ${skipped} already-scanned session(s).`);
   }
 
-  if (newSessions.length === 0) {
+  if (newCandidates.length === 0) {
     console.log("No new sessions to analyze.");
     return;
   }
@@ -120,13 +132,18 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
   let totalInsights = 0;
   let sessionsAnalyzed = 0;
 
-  for (const session of newSessions) {
-    const lines = countLines(session.path);
+  for (const candidate of newCandidates) {
+    const filePath = candidate.metadata.path as string;
+    const modified = candidate.metadata.modified as string;
+    const sizeBytes = candidate.metadata.size_bytes as number;
+
+    const lines = countLines(filePath);
     if (lines < MIN_SESSION_LINES) {
       logScan(config, {
-        session_id: session.session_id,
-        file_modified: session.modified,
-        file_size_bytes: session.size_bytes,
+        session_id: candidate.id,
+        source: adapter.name,
+        file_modified: modified,
+        file_size_bytes: sizeBytes,
         line_count: lines,
         project: "",
         project_path: "",
@@ -134,24 +151,25 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
         status: "skipped",
         error: `too short (${lines} lines)`,
       });
-      console.log(`Skipping ${session.session_id} (${lines} lines, min ${MIN_SESSION_LINES})`);
+      console.log(`Skipping ${candidate.id} (${lines} lines, min ${MIN_SESSION_LINES})`);
       continue;
     }
 
-    const extraction = extractSession(session.path);
+    const extraction = extractSession(filePath);
     if (!extraction) {
       logScan(config, {
-        session_id: session.session_id,
-        file_modified: session.modified,
-        file_size_bytes: session.size_bytes,
-        line_count: countLines(session.path),
+        session_id: candidate.id,
+        source: adapter.name,
+        file_modified: modified,
+        file_size_bytes: sizeBytes,
+        line_count: countLines(filePath),
         project: "",
         project_path: "",
         insights_count: 0,
         status: "skipped",
         error: "not a main session",
       });
-      console.log(`Skipping ${session.session_id} (not a main session)`);
+      console.log(`Skipping ${candidate.id} (not a main session)`);
       continue;
     }
 
@@ -176,7 +194,7 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
           priority,
           project,
           projectPath,
-          session: session.session_id,
+          session: candidate.id,
           source: "analyze",
           tags: Array.isArray(insight.tags) ? insight.tags.join(", ") : "",
         });
@@ -186,10 +204,11 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
 
       const chunks = chunkConversation(extraction).length;
       logScan(config, {
-        session_id: session.session_id,
-        file_modified: session.modified,
-        file_size_bytes: session.size_bytes,
-        line_count: countLines(session.path),
+        session_id: candidate.id,
+        source: adapter.name,
+        file_modified: modified,
+        file_size_bytes: sizeBytes,
+        line_count: countLines(filePath),
         project,
         project_path: projectPath,
         insights_count: insights.length,
@@ -200,22 +219,23 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
       sessionsAnalyzed++;
       const chunkNote = chunks > 1 ? ` (${chunks} chunks)` : "";
       console.log(
-        `Analyzed ${session.session_id}: ${insights.length} insight(s)${chunkNote}`
+        `Analyzed ${candidate.id}: ${insights.length} insight(s)${chunkNote}`
       );
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logScan(config, {
-        session_id: session.session_id,
-        file_modified: session.modified,
-        file_size_bytes: session.size_bytes,
-        line_count: countLines(session.path),
+        session_id: candidate.id,
+        source: adapter.name,
+        file_modified: modified,
+        file_size_bytes: sizeBytes,
+        line_count: countLines(filePath),
         project,
         project_path: projectPath,
         insights_count: 0,
         status: "error",
         error: errMsg,
       });
-      console.error(`Error analyzing ${session.session_id}: ${errMsg}`);
+      console.error(`Error analyzing ${candidate.id}: ${errMsg}`);
     }
   }
 

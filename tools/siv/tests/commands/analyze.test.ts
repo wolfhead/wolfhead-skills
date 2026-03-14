@@ -162,6 +162,7 @@ describe("executeAnalyze", () => {
       projectPath: undefined,
       since: undefined,
       minTurns: 1,
+      homeDir: undefined,
     });
 
     expect(mockExtractSession).toHaveBeenCalledWith("/sessions/test.jsonl");

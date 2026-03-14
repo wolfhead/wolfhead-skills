@@ -45,6 +45,7 @@ program
   .option("--project-path <path>", "Filter by project path")
   .option("--since <date>", "Sessions since date (YYYY-MM-DD)")
   .option("--session <id>", "Analyze specific session")
+  .option("--source <source>", "Source adapter (claude-code-session)", "claude-code-session")
   .action(async (options) => {
     const { executeAnalyze } = await import("./commands/analyze.js");
     await executeAnalyze({
@@ -52,6 +53,7 @@ program
       projectPath: options.projectPath,
       since: options.since,
       session: options.session,
+      source: options.source,
     });
   });
 
