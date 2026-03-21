@@ -1,17 +1,31 @@
 /**
- * Group command: use LLM to semantically group similar insights.
+ * Group command: incrementally assign insights to semantic groups.
  *
- * Reads all insights (regardless of status), asks LLM to group by
- * same actionable advice, then writes the group key back to each
- * insight in insights.jsonl.
+ * Processes ungrouped insights in batches. Each batch is sent to the LLM
+ * along with existing group summaries. The LLM assigns each insight to
+ * an existing group or creates a new one.
+ *
+ * State is persisted in groups.jsonl (accumulated group summaries)
+ * and the `group` field on each insight in insights.jsonl.
  */
 
 import fs from "fs";
 import { loadConfig } from "../config.js";
-import { readJsonl, updateInsightField } from "../storage.js";
+import {
+  readJsonl,
+  updateInsightField,
+  readGroups,
+  writeGroups,
+  type GroupEntry,
+} from "../storage.js";
 import { callLLM, getConsolidateConfig } from "../llm.js";
-import { buildGroupPrompt, type GroupOutput } from "../prompts/group.js";
+import {
+  buildAssignMergePrompt,
+  type AssignMergeOutput,
+} from "../prompts/group.js";
 import type { Insight } from "../types.js";
+
+export const BATCH_SIZE = 10;
 
 export interface GroupOptions {
   dryRun?: boolean;
@@ -20,25 +34,29 @@ export interface GroupOptions {
 }
 
 /**
- * Remove the group field from all insights by rewriting the file.
+ * Reset groups: clear group field from all insights and delete groups.jsonl.
  */
-function resetGroups(insightsPath: string): void {
-  if (!fs.existsSync(insightsPath)) return;
+function resetGroups(insightsPath: string, groupsPath: string): void {
+  // Clear group field from insights
+  if (fs.existsSync(insightsPath)) {
+    const content = fs.readFileSync(insightsPath, "utf-8");
+    const lines = content.split("\n").filter((line) => line.trim() !== "");
+    const updated = lines.map((line) => {
+      try {
+        const obj = JSON.parse(line);
+        delete obj.group;
+        return JSON.stringify(obj);
+      } catch {
+        return line;
+      }
+    });
+    fs.writeFileSync(insightsPath, updated.join("\n") + "\n", "utf-8");
+  }
 
-  const content = fs.readFileSync(insightsPath, "utf-8");
-  const lines = content.split("\n").filter((line) => line.trim() !== "");
-
-  const updated = lines.map((line) => {
-    try {
-      const obj = JSON.parse(line);
-      delete obj.group;
-      return JSON.stringify(obj);
-    } catch {
-      return line;
-    }
-  });
-
-  fs.writeFileSync(insightsPath, updated.join("\n") + "\n", "utf-8");
+  // Delete groups.jsonl
+  if (fs.existsSync(groupsPath)) {
+    fs.unlinkSync(groupsPath);
+  }
 }
 
 export async function executeGroup(
@@ -46,11 +64,11 @@ export async function executeGroup(
   homeDir?: string
 ): Promise<void> {
   const config = loadConfig(homeDir);
-  const allInsights = readJsonl<Insight>(config.insightsPath);
 
   if (options.reset) {
+    const allInsights = readJsonl<Insight>(config.insightsPath);
     const grouped = allInsights.filter((f) => f.group).length;
-    console.log(`Clearing group field from ${grouped} insights.`);
+    console.log(`Clearing group field from ${grouped} insights and deleting groups.jsonl.`);
 
     if (!options.yes) {
       const readline = await import("readline");
@@ -67,63 +85,84 @@ export async function executeGroup(
       }
     }
 
-    resetGroups(config.insightsPath);
+    resetGroups(config.insightsPath, config.groupsPath);
     console.log("Reset complete.");
   }
 
-  if (allInsights.length === 0) {
-    console.log("No insights to group.");
+  // Read current state
+  const allInsights = readJsonl<Insight>(config.insightsPath);
+  const ungrouped = allInsights.filter((f) => !f.group);
+
+  if (ungrouped.length === 0) {
+    console.log("No ungrouped insights to process.");
     return;
   }
 
-  // Build LLM input — just the fields needed for grouping
-  // Include current_group for already-grouped insights so the LLM preserves them
-  const input = allInsights.map((f) => ({
-    id: f.id,
-    category: f.category,
-    summary: f.summary,
-    details: f.details,
-    project: f.project,
-    ...(f.group ? { current_group: f.group } : {}),
-  }));
-
-  const { system, user } = buildGroupPrompt(input);
+  // Load existing groups
+  let groups = readGroups(config.groupsPath);
   const consolidateConfig = getConsolidateConfig(config);
-  const { result } = await callLLM<GroupOutput>(consolidateConfig, system, user);
 
-  // Invert: insight_id -> group_key
-  const idToGroup = new Map<string, string>();
-  for (const [groupKey, insightIds] of Object.entries(result.groups)) {
-    for (const id of insightIds) {
-      idToGroup.set(id, groupKey);
+  // Process in batches
+  for (let i = 0; i < ungrouped.length; i += BATCH_SIZE) {
+    const batch = ungrouped.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(ungrouped.length / BATCH_SIZE);
+
+    if (totalBatches > 1) {
+      console.log(`Processing batch ${batchNum}/${totalBatches} (${batch.length} insights)...`);
+    }
+
+    const { system, user } = buildAssignMergePrompt(
+      batch.map((f) => ({ id: f.id, summary: f.summary, details: f.details })),
+      groups.map((g) => ({ label: g.label, merged_summary: g.merged_summary, count: g.count }))
+    );
+
+    const { result } = await callLLM<AssignMergeOutput>(consolidateConfig, system, user);
+
+    // Apply assignments: update groups state and collect insight->label mapping
+    const idToGroup = new Map<string, string>();
+
+    for (const assignment of result.assignments) {
+      idToGroup.set(assignment.insight_id, assignment.label);
+
+      const existing = groups.find((g) => g.label === assignment.label);
+      if (existing) {
+        // Update existing group
+        existing.insight_ids.push(assignment.insight_id);
+        existing.count = existing.insight_ids.length;
+        existing.merged_summary = assignment.merged_summary;
+      } else {
+        // Create new group
+        groups.push({
+          label: assignment.label,
+          merged_summary: assignment.merged_summary,
+          insight_ids: [assignment.insight_id],
+          count: 1,
+        });
+      }
+    }
+
+    // Write group labels back to insights.jsonl
+    if (!options.dryRun) {
+      updateInsightField(config.insightsPath, idToGroup, "group");
     }
   }
 
-  // Print results sorted by group size
-  const groupEntries = Object.entries(result.groups)
-    .sort((a, b) => b[1].length - a[1].length);
-
-  for (const [groupKey, insightIds] of groupEntries) {
-    console.log(`\n[${groupKey}] (${insightIds.length} insights)`);
-    for (const id of insightIds) {
-      const f = allInsights.find((f) => f.id === id);
-      const status = f?.status ?? "?";
-      const summary = f?.summary ?? "?";
-      console.log(`  ${id} (${status}) ${summary.slice(0, 80)}${summary.length > 80 ? "..." : ""}`);
-    }
+  // Write updated groups.jsonl
+  if (!options.dryRun) {
+    writeGroups(config.groupsPath, groups);
   }
+
+  // Print results
+  const sorted = [...groups].sort((a, b) => b.count - a.count);
+  for (const g of sorted) {
+    console.log(`\n[${g.label}] (${g.count} insights)`);
+    console.log(`  ${g.merged_summary}`);
+  }
+
+  console.log(`\nGrouped ${ungrouped.length} insights into ${groups.length} groups.`);
 
   if (options.dryRun) {
-    console.log(`\nDry run — insights.jsonl not updated.`);
-    return;
-  }
-
-  // Write group keys back to insights.jsonl
-  updateInsightField(config.insightsPath, idToGroup, "group");
-
-  const ungrouped = allInsights.length - idToGroup.size;
-  console.log(`\nGrouped ${idToGroup.size} insights into ${groupEntries.length} groups.`);
-  if (ungrouped > 0) {
-    console.log(`Warning: ${ungrouped} insights not in LLM output.`);
+    console.log("Dry run — no files updated.");
   }
 }
