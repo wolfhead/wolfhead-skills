@@ -132,7 +132,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
-      emotion_markers: [],
+      emotion_markers: [{ type: "frustration", context: "stuck", turn_index: 1 }],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -252,7 +252,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
-      emotion_markers: [],
+      emotion_markers: [{ type: "frustration", context: "stuck", turn_index: 0 }],
     });
 
     mockCallLLM.mockRejectedValue(new Error("API timeout"));
@@ -292,7 +292,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
-      emotion_markers: [],
+      emotion_markers: [{ type: "frustration", context: "stuck", turn_index: 0 }],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -479,7 +479,7 @@ describe("executeAnalyze", () => {
     logSpy.mockRestore();
   });
 
-  it("uses full-scan analysis when no emotion_markers", async () => {
+  it("skips sessions without emotion markers", async () => {
     mockSearchSessions.mockReturnValue([
       {
         path: "/sessions/nomark.jsonl",
@@ -503,19 +503,17 @@ describe("executeAnalyze", () => {
       emotion_markers: [],
     });
 
-    mockCallLLM.mockResolvedValue({
-      result: { insights: [] },
-      usage: { input_tokens: 50, output_tokens: 10 },
-    });
-
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await executeAnalyze({});
 
-    // Should have called LLM with full-scan prompt (not marker-aware)
-    expect(mockCallLLM).toHaveBeenCalledTimes(1);
-    const [, systemPrompt] = mockCallLLM.mock.calls[0];
-    expect(systemPrompt).toContain("Extract knowledge that makes the agent better");
-    expect(systemPrompt).not.toContain("emotionally significant moments");
+    // Should NOT call LLM at all for marker-less sessions
+    expect(mockCallLLM).not.toHaveBeenCalled();
+    expect(mockExecuteLog).not.toHaveBeenCalled();
+
+    // Should log skip reason
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("no markers")
+    );
 
     logSpy.mockRestore();
   });

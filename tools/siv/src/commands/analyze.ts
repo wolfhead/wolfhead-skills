@@ -182,14 +182,26 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
 
     try {
       const markers = extraction.emotion_markers;
-      let insights: AnalyzeInsight[];
 
-      if (markers.length > 0) {
-        const contextWindows = buildContextWindows(extraction, markers);
-        insights = await callMarkerAnalyze(config, markers, contextWindows);
-      } else {
-        insights = await analyzeExtraction(config, extraction);
+      if (markers.length === 0) {
+        logScan(config, {
+          session_id: candidate.id,
+          source: adapter.name,
+          file_modified: modified,
+          file_size_bytes: sizeBytes,
+          line_count: countLines(filePath),
+          project,
+          project_path: projectPath,
+          insights_count: 0,
+          status: "skipped",
+          error: "no markers",
+        });
+        console.log(`Skipping ${candidate.id} (no markers)`);
+        continue;
       }
+
+      const contextWindows = buildContextWindows(extraction, markers);
+      const insights = await callMarkerAnalyze(config, markers, contextWindows);
 
       for (const insight of insights) {
         const category = VALID_CATEGORIES.has(insight.category)
@@ -214,7 +226,6 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
         totalInsights++;
       }
 
-      const chunks = chunkConversation(extraction).length;
       logScan(config, {
         session_id: candidate.id,
         source: adapter.name,
@@ -224,14 +235,12 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
         project,
         project_path: projectPath,
         insights_count: insights.length,
-        chunks: chunks > 1 ? chunks : undefined,
         status: "ok",
       });
 
       sessionsAnalyzed++;
-      const chunkNote = chunks > 1 ? ` (${chunks} chunks)` : "";
       console.log(
-        `Analyzed ${candidate.id}: ${insights.length} insight(s)${chunkNote}`
+        `Analyzed ${candidate.id}: ${insights.length} insight(s)`
       );
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
