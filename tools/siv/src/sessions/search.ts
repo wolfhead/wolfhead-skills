@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-export const MAX_SESSIONS = 20;
+export const MAX_SESSIONS = 200;
 export const DEFAULT_LATEST = 20;
 export const DEFAULT_MIN_TURNS = 3;
 
@@ -187,8 +187,12 @@ export function searchSessions(options: SearchOptions = {}): SessionInfo[] {
     });
   }
 
-  // Apply cap after all filtering
-  const cap = Math.min(latest, MAX_SESSIONS);
+  // Apply cap after all filtering. When --since or --date narrows the window,
+  // use MAX_SESSIONS as the only limit (don't apply DEFAULT_LATEST).
+  const hasDateFilter = since || date;
+  const cap = hasDateFilter
+    ? Math.min(latest === DEFAULT_LATEST ? MAX_SESSIONS : latest, MAX_SESSIONS)
+    : Math.min(latest, MAX_SESSIONS);
   if (results.length > cap) {
     process.stderr.write(
       `Warning: ${results.length} sessions matched, returning ${cap} most recent\n`
