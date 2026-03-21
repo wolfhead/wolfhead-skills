@@ -11,16 +11,12 @@ import { loadConfig, type SivConfig } from "../config.js";
 import {
   extractSession,
   type SessionExtraction,
-  type ConversationTurn,
   type EmotionMarker,
 } from "../sessions/extract.js";
 import { callLLM } from "../llm.js";
 import { executeLog } from "./log.js";
 import { appendJsonl, readJsonl } from "../storage.js";
-import {
-  buildAnalyzePrompt,
-  buildMarkerAnalyzePrompt,
-} from "../prompts/analyze.js";
+import { buildMarkerAnalyzePrompt } from "../prompts/analyze.js";
 import type { InsightCategory, Priority } from "../types.js";
 import { ClaudeCodeSessionAdapter } from "../adapters/claude-code-session.js";
 import type { SourceAdapter, ScanCandidate } from "../adapters/types.js";
@@ -55,7 +51,6 @@ interface ScanRecord {
   project: string;
   project_path: string;
   insights_count: number;
-  chunks?: number;
   status: "ok" | "error" | "skipped";
   error?: string;
 }
@@ -71,7 +66,6 @@ function getAdapter(sourceName: string): SourceAdapter {
 
 const MIN_NEW_LINES = 3;
 const MIN_SESSION_LINES = 20;
-const MAX_CHUNK_SIZE = 100_000; // chars of JSON per chunk
 
 const VALID_CATEGORIES: Set<string> = new Set([
   "correction",
@@ -263,117 +257,6 @@ export async function executeAnalyze(options: AnalyzeOptions): Promise<void> {
   console.log(
     `\nDone. Analyzed ${sessionsAnalyzed} session(s), logged ${totalInsights} insight(s).`
   );
-}
-
-/**
- * Analyze a session extraction. If the JSON is small enough, sends it
- * in one LLM call. Otherwise splits conversation at human_message
- * boundaries and processes each chunk in a loop.
- */
-async function analyzeExtraction(
-  config: SivConfig,
-  extraction: SessionExtraction
-): Promise<AnalyzeInsight[]> {
-  const fullJson = JSON.stringify(extraction);
-
-  // Small enough for one call
-  if (fullJson.length <= MAX_CHUNK_SIZE) {
-    return await callAnalyze(config, fullJson);
-  }
-
-  // Split into chunks
-  const chunks = chunkConversation(extraction);
-  const allInsights: AnalyzeInsight[] = [];
-
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkExtraction: SessionExtraction = {
-      ...extraction,
-      conversation: chunks[i],
-      // Only include signals in first chunk to avoid duplication
-      tool_failures: i === 0 ? extraction.tool_failures : [],
-      api_errors: i === 0 ? extraction.api_errors : [],
-      skills: i === 0 ? extraction.skills : [],
-      subagents: i === 0 ? extraction.subagents : [],
-    };
-
-    const chunkJson = JSON.stringify(chunkExtraction);
-    const insights = await callAnalyze(config, chunkJson);
-    allInsights.push(...insights);
-  }
-
-  return allInsights;
-}
-
-async function callAnalyze(
-  config: SivConfig,
-  condensedJson: string
-): Promise<AnalyzeInsight[]> {
-  const prompt = buildAnalyzePrompt(condensedJson);
-  const llmResult = await callLLM<AnalyzeResponse>(
-    config,
-    prompt.system,
-    prompt.user
-  );
-
-  const response = llmResult.result;
-  if (!response.insights || !Array.isArray(response.insights)) {
-    return [];
-  }
-  return response.insights;
-}
-
-/**
- * Split conversation turns into chunks at human_message boundaries.
- * Each chunk stays under MAX_CHUNK_SIZE when serialized.
- */
-function chunkConversation(
-  extraction: SessionExtraction
-): ConversationTurn[][] {
-  const turns = extraction.conversation;
-  if (turns.length === 0) return [[]];
-
-  // Find indices of human_message turns (natural split points)
-  const humanIndices: number[] = [];
-  for (let i = 0; i < turns.length; i++) {
-    if (turns[i].type === "human_message") {
-      humanIndices.push(i);
-    }
-  }
-
-  // If no human messages, return as single chunk
-  if (humanIndices.length === 0) return [turns];
-
-  // Build chunks: group consecutive human_message segments together
-  // until adding the next segment would exceed the size limit
-  const chunks: ConversationTurn[][] = [];
-  let currentChunk: ConversationTurn[] = [];
-
-  for (let i = 0; i < humanIndices.length; i++) {
-    const start = humanIndices[i];
-    const end = i + 1 < humanIndices.length ? humanIndices[i + 1] : turns.length;
-    const segment = turns.slice(start, end);
-
-    // Check if adding this segment exceeds the limit
-    const testChunk = [...currentChunk, ...segment];
-    const testSize = JSON.stringify({
-      ...extraction,
-      conversation: testChunk,
-    }).length;
-
-    if (currentChunk.length > 0 && testSize > MAX_CHUNK_SIZE) {
-      // Save current chunk, start new one with this segment
-      chunks.push(currentChunk);
-      currentChunk = segment;
-    } else {
-      currentChunk = testChunk;
-    }
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks;
 }
 
 /**
