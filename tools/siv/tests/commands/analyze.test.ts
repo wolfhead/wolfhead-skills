@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  buildAnalyzePrompt,
-  buildMarkerAnalyzePrompt,
-} from "../../src/prompts/analyze.js";
+import { buildMarkerAnalyzePrompt } from "../../src/prompts/analyze.js";
 
 // Mock all external dependencies
 vi.mock("../../src/config.js", () => ({
@@ -58,49 +55,6 @@ vi.spyOn(originalFs.default, "readFileSync").mockReturnValue(
 );
 
 import { executeAnalyze } from "../../src/commands/analyze.js";
-
-describe("buildAnalyzePrompt", () => {
-  it("returns system and user prompts", () => {
-    const result = buildAnalyzePrompt('{"metadata":{}}');
-
-    expect(result.system).toContain("session analyst");
-    expect(result.system).toContain("insights");
-    expect(result.system).toContain("correction");
-    expect(result.system).toContain("error");
-    expect(result.system).toContain("knowledge_gap");
-    expect(result.system).toContain("best_practice");
-  });
-
-  it("includes condensed JSON in user prompt", () => {
-    const json = '{"metadata":{"session_id":"abc123"}}';
-    const result = buildAnalyzePrompt(json);
-
-    expect(result.user).toContain("Analyze this session transcript");
-    expect(result.user).toContain(json);
-  });
-
-  it("mentions priority levels in system prompt", () => {
-    const result = buildAnalyzePrompt("{}");
-
-    expect(result.system).toContain("critical");
-    expect(result.system).toContain("high");
-    expect(result.system).toContain("medium");
-    expect(result.system).toContain("low");
-  });
-
-  it("instructs what not to report", () => {
-    const result = buildAnalyzePrompt("{}");
-
-    expect(result.system).toContain("What NOT to report");
-    expect(result.system).toContain("Anything that worked on the first try");
-  });
-
-  it("uses strong enforcement for high-frequency exclusions", () => {
-    const result = buildAnalyzePrompt("{}");
-
-    expect(result.system).toContain("NEVER report");
-  });
-});
 
 describe("executeAnalyze", () => {
   beforeEach(() => {
@@ -345,7 +299,10 @@ describe("executeAnalyze", () => {
 
     mockExtractSession.mockReturnValue({
       metadata: { session_id: "sess-b", slug: "proj", cwd: "/proj" },
-      conversation: [],
+      conversation: [
+        { type: "human_message", text: "do it differently" },
+        { type: "assistant_turn", message_id: "m1", text: "ok", tool_calls: [] },
+      ],
       skills: [],
       subagents: [],
       tool_failures: [],
@@ -353,7 +310,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
-      emotion_markers: [],
+      emotion_markers: [{ type: "correction", context: "wrong approach", turn_index: 0 }],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -383,7 +340,10 @@ describe("executeAnalyze", () => {
 
     mockExtractSession.mockReturnValue({
       metadata: { session_id: "sess-clean", slug: "proj", cwd: "/proj" },
-      conversation: [],
+      conversation: [
+        { type: "human_message", text: "do it differently" },
+        { type: "assistant_turn", message_id: "m1", text: "ok", tool_calls: [] },
+      ],
       skills: [],
       subagents: [],
       tool_failures: [],
@@ -391,7 +351,7 @@ describe("executeAnalyze", () => {
       api_errors: [],
       compactions: [],
       subagent_files: [],
-      emotion_markers: [],
+      emotion_markers: [{ type: "correction", context: "wrong approach", turn_index: 0 }],
     });
 
     mockCallLLM.mockResolvedValue({
@@ -546,16 +506,11 @@ describe("buildMarkerAnalyzePrompt", () => {
     expect(result.user).toContain(contextWindows);
   });
 
-  it("shares quality guidance with full-scan prompt", () => {
-    const fullPrompt = buildAnalyzePrompt("{}");
-    const markerPrompt = buildMarkerAnalyzePrompt([], "[]");
+  it("includes shared quality guidance", () => {
+    const result = buildMarkerAnalyzePrompt([], "[]");
 
-    // Both should contain the shared quality guidance sections
-    expect(fullPrompt.system).toContain("What NOT to report");
-    expect(markerPrompt.system).toContain("What NOT to report");
-    expect(fullPrompt.system).toContain("Quality bar");
-    expect(markerPrompt.system).toContain("Quality bar");
-    expect(fullPrompt.system).toContain("Summary format");
-    expect(markerPrompt.system).toContain("Summary format");
+    expect(result.system).toContain("What NOT to report");
+    expect(result.system).toContain("Quality bar");
+    expect(result.system).toContain("Summary format");
   });
 });
