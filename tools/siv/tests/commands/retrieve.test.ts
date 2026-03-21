@@ -41,14 +41,17 @@ describe("executeRetrieve", () => {
       apiKey: "test-key",
       apiBase: "https://api.test.com",
       model: "test-model",
+      scansPath: path.join(sivDir, "scans.jsonl"),
       insightsPath: path.join(sivDir, "insights.jsonl"),
       rulesPath: path.join(sivDir, "rules.jsonl"),
+      groupsPath: path.join(sivDir, "groups.jsonl"),
       backupsDir: path.join(sivDir, "backups"),
       promotionThreshold: {
         minSessions: 2,
         minOccurrences: 3,
         crossProjectMinProjects: 2,
       },
+      promotionScoreThreshold: 6,
     });
   });
 

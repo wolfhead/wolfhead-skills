@@ -11,12 +11,14 @@ vi.mock("../../src/config.js", () => ({
     scansPath: "/tmp/siv-test/scans.jsonl",
     insightsPath: "/tmp/siv-test/insights.jsonl",
     rulesPath: "/tmp/siv-test/rules.jsonl",
+    groupsPath: "/tmp/siv-test/groups.jsonl",
     backupsDir: "/tmp/siv-test/backups",
     promotionThreshold: {
       minSessions: 3,
       minOccurrences: 3,
       crossProjectMinProjects: 2,
     },
+    promotionScoreThreshold: 6,
   })),
 }));
 
