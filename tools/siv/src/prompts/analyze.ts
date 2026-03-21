@@ -72,8 +72,6 @@ Bad examples (DO NOT write these):
 
 If there are no insights worth reporting, return: { "insights": [] }`;
 
-export { SHARED_QUALITY_GUIDANCE };
-
 export function buildMarkerAnalyzePrompt(
   markers: Array<{ type: string; context: string; turn_index: number }>,
   contextWindows: string
