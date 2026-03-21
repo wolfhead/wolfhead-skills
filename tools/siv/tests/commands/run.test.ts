@@ -84,6 +84,34 @@ describe("buildGroupsFromInsights", () => {
     expect(groups).toHaveLength(0);
   });
 
+  it("sets scope to global when insights span multiple projects", () => {
+    const insights = [
+      makeInsight({ id: "INS-1", group: "ask_first", project: "proj-a", project_path: "/path/a" }),
+      makeInsight({ id: "INS-2", group: "ask_first", project: "proj-b", project_path: "/path/b" }),
+    ];
+
+    const groups = buildGroupsFromInsights(insights);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].scope).toBe("global");
+    expect(groups[0].project).toBe("");
+    expect(groups[0].project_path).toBe("");
+  });
+
+  it("keeps scope as project when insights are from same project", () => {
+    const insights = [
+      makeInsight({ id: "INS-1", group: "ask_first", project: "proj-a", project_path: "/path/a" }),
+      makeInsight({ id: "INS-2", group: "ask_first", project: "proj-a", project_path: "/path/a" }),
+    ];
+
+    const groups = buildGroupsFromInsights(insights);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].scope).toBe("project");
+    expect(groups[0].project).toBe("proj-a");
+    expect(groups[0].project_path).toBe("/path/a");
+  });
+
   it("respects custom minSize", () => {
     const insights = [
       makeInsight({ id: "INS-1", group: "a" }),

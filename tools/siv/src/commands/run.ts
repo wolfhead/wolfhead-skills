@@ -104,11 +104,14 @@ export function buildGroupsFromInsights(
   for (const [, items] of map) {
     if (items.length < minSize) continue;
     const first = items[0];
+    // Cross-project insights -> global scope
+    const projectPaths = new Set(items.map((f) => f.project_path));
+    const isGlobal = projectPaths.size > 1;
     groups.push({
       group_id: groupId++,
-      project: first.project,
-      project_path: first.project_path,
-      scope: "project",
+      project: isGlobal ? "" : first.project,
+      project_path: isGlobal ? "" : first.project_path,
+      scope: isGlobal ? "global" : "project",
       category: first.category,
       insights: items.map((f) => ({
         id: f.id,
