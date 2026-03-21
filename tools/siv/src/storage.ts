@@ -167,3 +167,27 @@ export function updateInsightStatus(
 
   fs.writeFileSync(filePath, updatedLines.join("\n") + "\n", "utf-8");
 }
+
+export interface GroupEntry {
+  label: string;
+  merged_summary: string;
+  insight_ids: string[];
+  count: number;
+}
+
+/**
+ * Read all group entries from a groups.jsonl file.
+ */
+export function readGroups(filePath: string): GroupEntry[] {
+  return readJsonl<GroupEntry>(filePath);
+}
+
+/**
+ * Write group entries to a groups.jsonl file, overwriting existing content.
+ */
+export function writeGroups(filePath: string, groups: GroupEntry[]): void {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const content = groups.map((g) => JSON.stringify(g)).join("\n") + "\n";
+  fs.writeFileSync(filePath, content, "utf-8");
+}

@@ -15,6 +15,7 @@ export interface SivConfig {
   scansPath: string;
   insightsPath: string;
   rulesPath: string;
+  groupsPath: string;
   backupsDir: string;
   promotionThreshold: {
     minSessions: number;
@@ -51,6 +52,7 @@ export function loadConfig(homeDir?: string): SivConfig {
     scansPath: path.join(sivDir, "scans.jsonl"),
     insightsPath: path.join(sivDir, "insights.jsonl"),
     rulesPath: path.join(sivDir, "rules.jsonl"),
+    groupsPath: path.join(sivDir, "groups.jsonl"),
     backupsDir: path.join(sivDir, "backups"),
     promotionThreshold: {
       minSessions: 2,
