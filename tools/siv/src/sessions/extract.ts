@@ -302,6 +302,8 @@ export function extractMetadata(records: Rec[]): SessionMetadata {
     turn_durations: [],
   };
 
+  let humanMessageCount = 0;
+
   for (const rec of records) {
     if (meta.session_id === null && rec.sessionId) {
       meta.session_id = rec.sessionId as string;
@@ -350,6 +352,26 @@ export function extractMetadata(records: Rec[]): SessionMetadata {
         meta.turn_count += 1;
       }
     }
+
+    // Count human messages as fallback for turn_count (SDK sessions lack turn_duration records)
+    if (rec.type === "user") {
+      const msg = (rec.message ?? {}) as Rec;
+      const content = msg.content;
+      // Skip tool_result records
+      if (Array.isArray(content)) {
+        const isToolResult = content.some(
+          (item) => typeof item === "object" && item !== null && (item as Rec).type === "tool_result"
+        );
+        if (!isToolResult) humanMessageCount++;
+      } else if (typeof content === "string") {
+        humanMessageCount++;
+      }
+    }
+  }
+
+  // If no turn_duration records (SDK/bot sessions), use human message count
+  if (meta.turn_count === 0 && humanMessageCount > 0) {
+    meta.turn_count = humanMessageCount;
   }
 
   return meta;
@@ -511,6 +533,41 @@ export function extractToolResultContent(contentValue: unknown): string {
 }
 
 /**
+ * Clean human message text by stripping XML wrapper noise from bot/SDK sessions.
+ *
+ * Bot messages often contain XML tags like <command-name>, <command-message>,
+ * <command-args>, <local-command-caveat>, <task-notification>, etc.
+ * Extract the actual user intent from these wrappers.
+ */
+function cleanHumanMessage(text: string): string {
+  // Extract slash command: <command-name>/foo</command-name> <command-args>bar</command-args>
+  const cmdNameMatch = text.match(/<command-name>\/?([^<]+)<\/command-name>/);
+  const cmdArgsMatch = text.match(/<command-args>([^<]*)<\/command-args>/);
+  if (cmdNameMatch && cmdArgsMatch) {
+    const cmd = cmdNameMatch[1].trim();
+    const args = cmdArgsMatch[1].trim();
+    return args ? `/${cmd} ${args}` : `/${cmd}`;
+  }
+
+  // Strip <local-command-caveat>...</local-command-caveat> blocks entirely
+  text = text.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
+
+  // Strip <task-notification>...</task-notification> — replace with short stub
+  if (text.includes("<task-notification>")) {
+    const taskIdMatch = text.match(/<task-id>([^<]+)<\/task-id>/);
+    text = text.replace(/<task-notification>[\s\S]*?<\/task-notification>/g, "").trim();
+    if (taskIdMatch) {
+      text = (text ? text + " " : "") + `[task:${taskIdMatch[1]}]`;
+    }
+  }
+
+  // Strip remaining <command-message>...</command-message> wrappers
+  text = text.replace(/<command-message>[\s\S]*?<\/command-message>/g, "");
+
+  return text.trim();
+}
+
+/**
  * Extract the conversation flow as a list of turns.
  */
 export function extractConversation(records: Rec[]): ConversationTurn[] {
@@ -539,6 +596,12 @@ export function extractConversation(records: Rec[]): ConversationTurn[] {
       } else {
         text = String(content);
       }
+
+      // Strip XML noise from bot/SDK messages to extract actual user intent
+      text = cleanHumanMessage(text);
+
+      // Skip empty messages after cleaning
+      if (!text.trim()) continue;
 
       // Collapse skill-content dumps into compact stubs
       if (text.slice(0, 200).includes("Base directory for this skill:")) {
