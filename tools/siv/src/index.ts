@@ -64,6 +64,7 @@ program
   .option("--project-path <path>", "Filter by project path")
   .option("--since <date>", "Sessions since date (YYYY-MM-DD)")
   .option("--session <id>", "Extract specific session")
+  .option("--summary", "Truncate assistant text for compact output")
   .action(async (options) => {
     const { executeExtract } = await import("./commands/extract.js");
     await executeExtract({
@@ -71,6 +72,7 @@ program
       projectPath: options.projectPath,
       since: options.since,
       session: options.session,
+      summary: options.summary || false,
     });
   });
 
