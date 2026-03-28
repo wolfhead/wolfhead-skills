@@ -78,5 +78,8 @@ export function executeExtract(options: ExtractOptions): void {
     console.error(`Skipped ${skipped} non-main session(s).`);
   }
 
-  console.log(JSON.stringify(results, null, 2));
+  // Compact JSON when in summary mode (optimized for LLM context consumption)
+  // Pretty JSON otherwise (human-readable for debugging)
+  const indent = options.summary ? undefined : 2;
+  console.log(JSON.stringify(results, null, indent));
 }
