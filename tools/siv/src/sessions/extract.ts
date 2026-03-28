@@ -527,8 +527,18 @@ export function extractConversation(records: Rec[]): ConversationTurn[] {
     if (cat === "human_message") {
       const msg = (rec.message ?? {}) as Rec;
       const content = msg.content;
-      const text =
-        typeof content === "string" ? content : String(content);
+      let text: string;
+      if (typeof content === "string") {
+        text = content;
+      } else if (Array.isArray(content)) {
+        // Content blocks: extract text from {type: "text", text: "..."} blocks
+        text = content
+          .filter((b: unknown) => typeof b === "object" && b !== null && (b as Rec).type === "text")
+          .map((b: unknown) => ((b as Rec).text as string) ?? "")
+          .join("\n");
+      } else {
+        text = String(content);
+      }
 
       // Collapse skill-content dumps into compact stubs
       if (text.slice(0, 200).includes("Base directory for this skill:")) {
