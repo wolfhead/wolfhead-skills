@@ -34,13 +34,19 @@ Copy this checklist and check off items as you complete them:
 
 ### Step 1: Gather session data
 
-Run siv extract to get recent session extractions:
+Run siv extract with --summary to get compact session data:
 
 ```bash
-siv extract --since <YYYY-MM-DD of 24h ago> --latest 50
+siv extract --since <YYYY-MM-DD of 24h ago> --latest 50 --summary
 ```
 
-This outputs JSON with per-session: metadata (tokens, cost, duration), tool_usage_summary, skills invoked, tool_failures, emotion_markers, and conversation.
+This outputs JSON with per-session: metadata (tokens, cost, duration), tool_usage_summary, skills invoked, tool_failures, emotion_markers, and human messages (truncated). Assistant turns are omitted in summary mode — their signals are in the structured fields.
+
+If you need full conversation for a specific session, drill down without --summary:
+
+```bash
+siv extract --session <session-id>
+```
 
 If no sessions are found, note this in the report and skip to Step 2.
 
