@@ -29,8 +29,9 @@ function summarizeConversation(conversation: ConversationTurn[]): ConversationTu
   const result: ConversationTurn[] = [];
   for (const turn of conversation) {
     if (turn.type === "human_message") {
-      const text = turn.text.length > SUMMARY_TEXT_MAX_CHARS
-        ? turn.text.slice(0, SUMMARY_TEXT_MAX_CHARS) + "…"
+      const maxLen = SUMMARY_TEXT_MAX_CHARS * 2;
+      const text = turn.text.length > maxLen
+        ? turn.text.slice(0, SUMMARY_TEXT_MAX_CHARS) + " … " + turn.text.slice(-SUMMARY_TEXT_MAX_CHARS)
         : turn.text;
       result.push({ type: "human_message", text });
     }
