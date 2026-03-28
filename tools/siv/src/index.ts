@@ -58,6 +58,23 @@ program
   });
 
 program
+  .command("extract")
+  .description("Extract session data as JSON (no LLM, no writes)")
+  .option("--latest <n>", "Number of recent sessions (default: 20)")
+  .option("--project-path <path>", "Filter by project path")
+  .option("--since <date>", "Sessions since date (YYYY-MM-DD)")
+  .option("--session <id>", "Extract specific session")
+  .action(async (options) => {
+    const { executeExtract } = await import("./commands/extract.js");
+    await executeExtract({
+      latest: options.latest ? parseInt(options.latest) : undefined,
+      projectPath: options.projectPath,
+      since: options.since,
+      session: options.session,
+    });
+  });
+
+program
   .command("retrieve")
   .description("Get consolidated rules for context injection")
   .option("--project-path <path>", "Project path")
