@@ -97,10 +97,23 @@ Serves two purposes: (a) human-typed messages, and (b) tool result feedback.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `message.content` | `string` | The user's typed text. May contain XML tags for commands. |
+| `message.content` | `string \| array` | The user's input. Either a plain string (interactive CLI) or an array of content blocks `[{type: "text", text: "..."}]` (Agent SDK / programmatic callers). May contain XML tags for commands. |
 | `thinkingMetadata` | `object` (optional) | Present on turn-initiating messages. |
 | `todos` | `array` (optional) | Task list state. Usually `[]`. |
 | `permissionMode` | `string` (optional) | Permission level: `"default"` or other modes. |
+
+**Content block format (when array):**
+```json
+{
+  "message": {
+    "role": "user",
+    "content": [
+      {"type": "text", "text": "the user's typed text..."}
+    ]
+  }
+}
+```
+This format is used by the Claude Agent SDK (`query()`) and programmatic callers. Interactive CLI sessions typically use the plain string format.
 
 ### Variant B: Tool result feedback
 
