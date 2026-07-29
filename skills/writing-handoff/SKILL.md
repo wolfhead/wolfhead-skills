@@ -16,11 +16,16 @@ continue the work without asking what anything means?
 The companion skill `resuming-from-handoff` consumes this format: every claim you write will be
 *verified against reality* at pickup, so write claims that are checkable.
 
+Ending a substantive session? Run `closing-session` first — the handoff should describe
+post-triage reality, and surviving uncertainty attaches inline to claims (`UNTESTED:`,
+`ASSUMED:`), never as a standalone list.
+
 <HARD-GATE>
 FORBIDDEN in a handoff:
 - Relative dates ("yesterday", "two days ago", "this morning"). Every date is absolute (YYYY-MM-DD).
 - Reconstructed or skeleton commands (`<N>`, `...`, "fill in the path"). Copy the exact command
-  verbatim from the session. If a command was never actually run, mark it `UNTESTED:`.
+  verbatim from the session. If a command was never actually run, mark it `UNTESTED:`; an
+  unverified assumption gating a next action is marked inline as `ASSUMED: <what> — <why unverified>`.
 - Decisions without a date and owner ("we decided..." → "USER decided 2026-07-08: ...").
 - Claims with no way to check them. Pair each with its anchor (SHA, path, version, count).
 </HARD-GATE>
