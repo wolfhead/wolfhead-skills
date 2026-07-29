@@ -37,22 +37,23 @@ done for today / 收尾 / close the session, or a handoff is about to be written
 **Ordering rationale:** triage first, handoff second — the handoff then describes post-triage
 reality. Handoff-first would be staled immediately by the triage.
 
-### Step 1 — Ask both questions
+### Step 1 — Select the question by session type
 
-Answer honestly, from the session's actual history:
+The question depends on what the session was about; ask only what applies:
 
-1. **"What am I (the agent) least confident about in this session's work?"** — aimed at the
-   work: things asserted but not verified, commands proposed but never run, behavior assumed
-   from reading code rather than executing it.
-2. **"What is the user missing or not realizing about the situation?"** — aimed at the
-   situation: risks, implications, or context the user hasn't engaged with.
+| Session type | Question | Where the blind spot lives |
+|---|---|---|
+| Coding / implementation | Q1: **"What am I (the agent) least confident about in this session's work?"** — things asserted but not verified, commands proposed but never run, behavior assumed from reading code rather than executing it | The agent's actions |
+| Strategy / planning / discussion | Q2: **"What is the user missing or not realizing about the situation?"** — risks, implications, or context the user hasn't engaged with | The user's mental model |
+| Mixed session | Both | Both |
 
-V1 is self-report only. Transcript mining (scanning the session for hedge markers and
-never-executed commands, e.g. as a `siv` feature) is a future upgrade, out of scope here.
+Answer honestly, from the session's actual history. V1 is self-report only. Transcript mining
+(scanning the session for hedge markers and never-executed commands, e.g. as a `siv` feature)
+is a future upgrade, out of scope here.
 
 ### Step 2 — Three-exit gate (HARD-GATE)
 
-Every surfaced item MUST take exactly one exit:
+**Q1 items (work uncertainty)** MUST take exactly one exit:
 
 | Exit | When | Result |
 |------|------|--------|
@@ -60,14 +61,22 @@ Every surfaced item MUST take exactly one exit:
 | **Convert to executable check** | Load-bearing, checkable, but can't be resolved now | A test or doctor-style assertion committed as code. Code fails loudly; markdown rots silently. |
 | **Drop** | Neither of the above | One-line **falsifiable** reason ("covered by test X passing", not "seems unlikely"). |
 
+**Q2 items (user blind spots)** have a different audience — the user, who is present right
+now. Their only exit is **raise it now**: state the item and let the conversation resolve it.
+A survivor is one that changes a decision → recorded as a dated decision (`USER decided
+<date>: ...` — existing `writing-handoff` vocabulary) in the decision log or spec. Everything
+else dies in the conversation. Q2 items never become checks, markers, or notes — telling the
+user later defeats the point of telling them.
+
 **FORBIDDEN:** exiting as "note it for later" in prose. No **free-floating** uncertainty list
 survives as text — not in the handoff, not in a ledger file, not in memory. (The only textual
 survivor is an inline marker attached to a concrete claim — Step 3.)
 
-### Step 3 — Escape hatch (real time pressure only)
+### Step 3 — Escape hatch (Q1 items, real time pressure only)
 
-If the user must leave now and an item can't be investigated and isn't yet expressible as a
-check: it must **attach to a specific claim** in the handoff, inline —
+Q2 items get no escape hatch — raising one takes a sentence, so time pressure never justifies
+deferring it. For Q1: if the user must leave now and an item can't be investigated and isn't
+yet expressible as a check: it must **attach to a specific claim** in the handoff, inline —
 
 - `UNTESTED:` on a command that was never run (existing `writing-handoff` vocabulary)
 - `ASSUMED:` on a next-action gate ("ASSUMED: migration is reversible — never tested
@@ -123,3 +132,5 @@ Per `docs/skill-design-best-practices.md`: pressure-test before shipping. Baseli
    the session rather than filing it away?
 4. **Chain test:** full `closing-session` → `writing-handoff` run — does the handoff contain
    zero free-floating uncertainties?
+5. **Session-type test:** a pure discussion/planning session — does the skill ask Q2 (not Q1),
+   raise items in-conversation, and record survivors as dated decisions rather than checks?
