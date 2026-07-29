@@ -83,8 +83,10 @@ yet expressible as a check: it must **attach to a specific claim** in the handof
   `migrate:down`")
 
 If an item cannot attach to any concrete claim, that is the tell it was a vibe → drop.
-Inline markers ride claims `resuming-from-handoff` already verifies, so that skill needs
-**zero changes**.
+Inline markers ride claims `resuming-from-handoff` already verifies. But `ASSUMED:` items
+have no check command, so they land in that skill's `UNVERIFIABLE:` bucket — its Step 4 is
+hardened so an `UNVERIFIABLE:` item touching the next action also requires user confirmation,
+not just `STALE:` ones.
 
 ### Step 4 — Fork
 
@@ -115,8 +117,10 @@ Two lines only:
 
 - **No standalone contract/invariants/assumptions file per project** — considered and
   rejected: markdown ledgers rot; surviving assumptions live as executable checks instead.
-- **No changes to `resuming-from-handoff`** — inline markers attach to claims it already
-  verifies.
+- **Minimal change to `resuming-from-handoff`** — inline markers attach to claims it already
+  verifies; the only addition is Step 4 treating `UNVERIFIABLE:` items that touch the next
+  action the same as `STALE:` ones, since `ASSUMED:` markers have no check command and would
+  otherwise fall through ungated.
 - **No transcript mining in V1** — future `siv` feature.
 - **No fresh-instance/subagent review in V1** — heavier pattern, possible later composition.
 

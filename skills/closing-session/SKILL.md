@@ -67,7 +67,7 @@ defeats the point. No time-pressure exemption: raising one costs a sentence.
 |---|---|
 | "It's probably fine" → drop | Drop reasons must be falsifiable, not reassuring |
 | "I'll note it in the handoff so it isn't lost" | The prose note IS the forbidden exit; attach to a claim or drop |
-| "I'll give it an owner and call it a follow-up task, not an open question" | An owner label and a "Blocker:" line don't convert doubt into a check — if no test or assertion was written, it's the forbidden note wearing a work-queue costume |
+| "I'll give it an owner and call it a follow-up task, not an open question" | An owner label and a "Blocker:" line don't convert doubt into a check — if no test or assertion was written AND no inline marker was attached, it's the forbidden note wearing a work-queue costume |
 | "No time to investigate anything" | A check takes minutes; the escape hatch still requires a claim to attach to |
 | "The user is waiting — skip the questions" | The questions are the skill; skipping them is not closing the session |
 | "The session went smoothly — nothing to surface" | Smooth sessions hide unexecuted commands and unread code; check the history |

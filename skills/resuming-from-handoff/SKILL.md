@@ -43,8 +43,8 @@ Copy this checklist and check items off:
 - [ ] 4. **Report the diff before acting** — three buckets, one line each:
       `CONFIRMED:` claims that held · `STALE:` claims reality contradicts (with evidence) ·
       `UNVERIFIABLE:` claims you cannot check from here (say what access would settle them).
-      Then state the (possibly amended) resume plan. If anything STALE touches the next action,
-      get the user's confirmation before executing; if all checks pass, proceed.
+      Then state the (possibly amended) resume plan. If anything STALE or UNVERIFIABLE touches
+      the next action, get the user's confirmation before executing; if all checks pass, proceed.
 - [ ] 5. **Resume** — and if the handoff was stale, update it (or the ledger) so the next reader
       inherits reality, not the old hypothesis.
 
