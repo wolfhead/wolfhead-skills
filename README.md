@@ -30,6 +30,7 @@ Copy skill folders into `.claude/skills/` in your project or `~/.claude/skills/`
 
 | Skill | Description |
 |-------|-------------|
+| [layered-design](skills/layered-design/) | Runs design discussions with a human decision-maker as dependency-layered decisions: research before each layer's questions, one fully-contextualized decision at a time, case-checked before a layer closes. Replaces unstructured brainstorming. |
 | [research-workflow](skills/research-workflow/) | Search-first research with parallel subagent source gathering. Never guess from training data on verifiable questions. |
 | [claude-session-analyst](skills/claude-session-analyst/) | Orchestrates multi-session Claude Code transcript analysis. Searches sessions, preprocesses with subsession extraction, dispatches cheap/fast subagents, and synthesizes a unified self-improvement report. |
 | [openclaw-session-analyst](skills/openclaw-session-analyst/) | Orchestrates OpenClaw session transcript analysis with cost tracking, model switching detection, and multi-provider support. |
