@@ -14,7 +14,8 @@ after they're written, artifacts move, gates open or close, decisions get made i
 the doc never saw.
 
 <HARD-GATE>
-FORBIDDEN before the verification pass is complete and reported:
+FORBIDDEN before the verification pass is complete and reported — or the user has explicitly
+waived verification (step 3):
 - Executing the handoff's "next action" commands
 - Any training run, deployment, publish, or other expensive/irreversible operation
 - Re-doing work the verification shows already completed
@@ -31,7 +32,13 @@ Copy this checklist and check items off:
       (pick by the doc's own "Last updated" date; `git log -1 -- <file>` as tiebreaker).
 - [ ] 2. **Extract its claims** — branch/SHA anchors, artifact paths (+hosts), pending actions and
       their gates, dated decisions, "valid as of" date.
-- [ ] 3. **Verify every checkable claim against reality:**
+- [ ] 3. **Ask before verifying** — one short question to the user: the handoff's age, what a
+      verification pass would check, and a recommendation (fresh handoff + fast-moving work →
+      skipping is reasonable; older or gate-touching next action → verify). Run the pass only on
+      approval. If the user waives it: mark the handoff's claims as ASSUMED, say so in your
+      opening reply, skip to step 6 — but still report any contradiction you happen to notice.
+      Non-interactive session (no user to ask): default to verifying.
+- [ ] 4. **Verify every checkable claim against reality** (only if approved in step 3):
       - `git log <claimed-SHA>..HEAD` — commits AFTER the handoff? Read them; they may complete or
         invalidate the doc's next action. Check commit messages *and* new/changed result docs.
       - Anchors: branch exists/pushed, test suite count, claimed artifact paths (ssh to the named
@@ -40,12 +47,17 @@ Copy this checklist and check items off:
         run the doc's own check command; don't assume time fixed it.
       - Dates: how old is the doc? Everything time-sensitive ages; a "pending" older than a day
         is a claim to verify, not a fact.
-- [ ] 4. **Report the diff before acting** — three buckets, one line each:
+- [ ] 5. **Report the diff before acting** — three buckets, one line each:
       `CONFIRMED:` claims that held · `STALE:` claims reality contradicts (with evidence) ·
       `UNVERIFIABLE:` claims you cannot check from here (say what access would settle them).
       Then state the (possibly amended) resume plan. If anything STALE or UNVERIFIABLE touches
       the next action, get the user's confirmation before executing; if all checks pass, proceed.
-- [ ] 5. **Resume** — and if the handoff was stale, update it (or the ledger) so the next reader
+- [ ] 6. **Orient** — the handoff is a delta against project knowledge, not the project itself.
+      If the project defines session-start reading (a CLAUDE.md "read at session start" list or
+      equivalent), complete that list now — the verification pass does not substitute for it.
+      Resuming into a discussion with a human? They have been away too: open by restating the
+      shared picture in plain terms before using the vocabulary of docs only you just read.
+- [ ] 7. **Resume** — and if the handoff was stale, update it (or the ledger) so the next reader
       inherits reality, not the old hypothesis.
 
 ## Red flags — stop and verify first
@@ -53,9 +65,10 @@ Copy this checklist and check items off:
 | Rationalization | Reality |
 |---|---|
 | "The handoff is only a day old" | One day = one production retrain, one data backfill, one decision |
-| "User said continue quickly" | Verification is minutes; re-running finished work is hours |
+| "User said continue quickly" | Speed is the user's call, not yours — ask the one-line step-3 question instead of silently skipping (or silently grinding through) verification |
 | "git log looks clean" | Git can't see remote artifacts, running jobs, or conversation decisions — check the doc's non-git anchors too |
 | "The doc's author was thorough" | Thorough then ≠ true now; staleness isn't an authorship flaw |
+| "Handoff + verification told me everything" | They tell you where you are, not what the project IS — orientation gaps surface as jargon your user must decode |
 
 ## Common mistakes
 
@@ -63,4 +76,5 @@ Copy this checklist and check items off:
 - Silently fixing a stale next action without reporting the discrepancy — the user may know
   context you don't about *why* reality diverged.
 - Reading the entire repo instead of the handoff + targeted verification (the doc exists to
-  spare you that).
+  spare you that) — but "targeted" INCLUDES the project's own session-start reading list;
+  skipping it to stay lean leaves you fluent in the delta and ignorant of the whole.
