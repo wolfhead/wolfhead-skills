@@ -93,6 +93,29 @@ Copy this checklist and check items off as the discussion proceeds:
       designed "for later" — defer it with its questions instead
       (vocabulary-before-consumers is a documented standards failure mode).
 
+## Cross-boundary impacts — neither ignored nor elaborated
+
+Deferring a topic never licenses being blind to it. Whenever a decide-now
+decision **materially constrains work outside the current scope**, or
+**outside work depends on this decision to be made a certain way**, that
+impact MUST be surfaced — but treated at **seam depth**, which is:
+
+1. **Name the dependency or impact** in one or two sentences ("the replay
+   module will consume these ops; if ops aren't serializable, replay breaks").
+2. **Design the structural closure that absorbs it** — an interface contract,
+   a reserved slot, an invariant the neighbor may rely on, a compatibility
+   rule. This is part of the CURRENT decision and may change which option
+   wins.
+3. **Record the neighbor's own open questions at the neighbor's future home**
+   — not here.
+
+The depth test: **what crosses the scope boundary is a CONTRACT, not an
+implementation.** If you are detailing the neighbor's internals, you went too
+deep — pull back to the contract. If the neighbor could be broken or
+foreclosed by this decision and nothing was said, you went too shallow —
+surface it. Both failure modes are real; the skill's scope discipline governs
+how much you DESIGN, never what you are allowed to SEE.
+
 ## Red flags — stop and re-enter the workflow
 
 | Thought | Reality |
@@ -103,6 +126,7 @@ Copy this checklist and check items off as the discussion proceeds:
 | "The design looks complete; cases are a formality" | The case check caught two real defects in its first live run. Soft case lists are the failure mode |
 | "This entity will be needed later, design it now" | No consumer = no design. Record the open questions as future acceptance criteria instead |
 | "While we're here, let's also settle this adjacent detail" | If it doesn't block the current scope, it doesn't enter the map — design the OPENING for it (slot, registry row, extension point) and move on. Unrolling the full roadmap in one discussion is scope creep applied to conversations |
+| "That's out of scope, skip it" (about a real cross-boundary impact) | Deferring a TOPIC is not ignoring an IMPACT. If a decide-now decision constrains outside work or is depended on by it, surface it at seam depth (see Cross-boundary impacts) — silence here is how deferred modules get broken by today's rulings |
 | "Research will slow us down" | One research round per layer is minutes of agent time; an undergrounded decision costs a redesign |
 | "Their time is limited, so batch everything into one big accept/change list" | Batched approvals produce shallow decisions on narrow context — the exact failure this skill exists to prevent. What respects a decision-maker's time is one decision at a time, each arriving fully grounded and genuinely decidable |
 
