@@ -11,9 +11,12 @@ description: >
 # Layered Design Discussion
 
 Core principle: **a design discussion is a sequence of DECISIONS, not a pile of
-questions.** Structure the decisions by dependency, ground each layer in
-research before asking anything, present one decision at a time with full
-context, and verify the design against concrete cases before closing a layer.
+questions — and only the decisions the current scope actually needs.**
+Structure those decisions by dependency, ground each layer in research before
+asking anything, present one decision at a time with full context, and verify
+the design against concrete cases before closing a layer. Everything the
+current scope does NOT need becomes a designed opening (an extension point
+with recorded open questions), never a discussion item.
 
 Born from a live failure (2026-08-14, game-design-again): the unstructured
 default got corrected three times in one session — questions thrown one at a
@@ -46,12 +49,19 @@ Copy this checklist and check items off as the discussion proceeds:
       proposal: a design discussion built on unconfirmed vocabulary collapses
       later. The human has been away from the details — no jargon-first
       openings.
-- [ ] 2. **Map ALL alignment points, then layer them by dependency.**
-      Enumerate every open decision the design needs. Group them into layers
-      such that each layer depends only on layers before it; settle upstream
-      layers first. Show the map as a table (layer | decisions | depends on)
-      and let the human reorder or add. The map is the contract for the whole
-      discussion; revisit it when an answer reshapes the terrain.
+- [ ] 2. **Map the alignment points, filter by "must decide NOW", layer the
+      rest by dependency.** Enumerate the open decisions, then sort each into:
+      **decide now** (the current scope cannot be built without it) or
+      **defer with a designed opening** (an extension point — a reserved
+      slot, a registry, a named future home — plus its open questions
+      recorded). Only decide-now items enter the layers; the discussion is
+      NOT the place to unroll the whole architecture or roadmap. Group the
+      decide-now items into layers such that each layer depends only on
+      layers before it; settle upstream layers first. Show the map as a
+      table (layer | decisions | depends on) WITH the deferred list beside
+      it, so the human can promote or demote items. The map is the contract
+      for the whole discussion; revisit it when an answer reshapes the
+      terrain.
 - [ ] 3. **Per layer: research BEFORE questions.** Survey how mature systems
       of the same class solve this problem (games → shipped games; infra →
       production systems; check the project's existing research docs first,
@@ -92,6 +102,7 @@ Copy this checklist and check items off as the discussion proceeds:
 | "That component's internals are obvious" | Obvious to you. To the human it is a black box — show the table, the sketch, the worked example |
 | "The design looks complete; cases are a formality" | The case check caught two real defects in its first live run. Soft case lists are the failure mode |
 | "This entity will be needed later, design it now" | No consumer = no design. Record the open questions as future acceptance criteria instead |
+| "While we're here, let's also settle this adjacent detail" | If it doesn't block the current scope, it doesn't enter the map — design the OPENING for it (slot, registry row, extension point) and move on. Unrolling the full roadmap in one discussion is scope creep applied to conversations |
 | "Research will slow us down" | One research round per layer is minutes of agent time; an undergrounded decision costs a redesign |
 | "Their time is limited, so batch everything into one big accept/change list" | Batched approvals produce shallow decisions on narrow context — the exact failure this skill exists to prevent. What respects a decision-maker's time is one decision at a time, each arriving fully grounded and genuinely decidable |
 
@@ -121,8 +132,9 @@ Incorrect (bundled, abstract, black-box):
 - Replaces generic brainstorming for design work: brainstorming explores
   intent with unlayered questions and no research grounding; this skill exists
   because that failed with a real decision-maker.
-- Research rounds may dispatch research subagents or invoke a research
-  workflow skill if one is available — this skill defines WHEN research
-  happens (before each layer's questions), not how to search.
+- Research rounds dispatch research subagents with a bounded brief (what
+  class of systems to survey, what to extract, the sourced/inference/NOT
+  FOUND discipline) — this skill defines WHEN research happens (before each
+  layer's questions) and its output discipline, not how to search.
 - Output feeds writing-plans / plan mode: the closed layers plus the case
   registry ARE the design; planning starts after, not instead.
