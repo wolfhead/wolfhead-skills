@@ -474,6 +474,7 @@ Executable code for tasks requiring deterministic reliability or that would be r
 - **Explicit error handling** - Provide helpful error messages, not bare exceptions
 - **Make execution intent clear** - Distinguish "Run script.py" (execute) from "See script.py" (read as reference)
 - **Test scripts by running them** to ensure no bugs and expected output
+- **Use `${CLAUDE_SKILL_DIR}` for script paths** - Never use relative paths like `python3 skills/my-skill/scripts/foo.py` which depend on CWD. Use `python3 ${CLAUDE_SKILL_DIR}/scripts/foo.py` instead. Claude Code resolves this variable to the skill's actual directory, so scripts work regardless of the agent's working directory (local dev, remote containers, different project roots).
 
 ```python
 # GOOD: Handle errors explicitly
