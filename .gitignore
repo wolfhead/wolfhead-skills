@@ -2,3 +2,5 @@
 __pycache__/
 docs/reviews/
 .DS_Store
+.env
+.env.*
